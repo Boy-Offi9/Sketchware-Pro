@@ -363,21 +363,38 @@ public class BackupFactory {
             File localLibs = getLocalLibsPath();
 
             if (localLibs.exists()) {
+                JSONArray ja;
                 try {
-                    JSONArray ja = new JSONArray(FileUtil.readFile(localLibs.getAbsolutePath()));
+                    ja = new JSONArray(FileUtil.readFile(localLibs.getAbsolutePath()));
+                } catch (Exception e) {
+                    error = "couldn't read the local library registry: " + e.getMessage();
+                    return;
+                }
 
-                    File libsF = new File(outFolder, "local_libs");
-                    libsF.mkdirs();
+                File libsF = new File(outFolder, "local_libs");
+                libsF.mkdirs();
 
-                    for (int i = 0; i < ja.length(); i++) {
+                // Resolve the lib directory by name (the registry folder name is the
+                // library's identity); deriving it from dexPath silently skipped
+                // JAR-only libraries (no classes.dex) and aborted the whole copy
+                // on the first such entry, leaving backups without their libraries.
+                for (int i = 0; i < ja.length(); i++) {
+                    try {
                         JSONObject jo = ja.getJSONObject(i);
+                        String name = jo.getString("name");
 
-                        File f = new File(jo.getString("dexPath")).getParentFile();
-                        copy(f, new File(libsF, f.getName()));
+                        if (name.isEmpty() || name.contains(File.separator) || name.contains("..")) {
+                            continue;
+                        }
 
+                        File f = new File(getAllLocalLibsDir(), name);
+                        if (f.exists()) {
+                            copy(f, new File(libsF, name));
+                        }
+                    } catch (Exception e) {
+                        Log.e(BackupFactory.class.getSimpleName(),
+                                "skipping local library #" + i + " during backup", e);
                     }
-
-                } catch (Exception ignored) {
                 }
             }
         }
@@ -533,6 +550,11 @@ public class BackupFactory {
                         if (!local_lib_real_path.exists()) {
                             local_lib_real_path.mkdirs();
                             copy(local_lib, local_lib_real_path);
+                        } else {
+                            // The library already exists. Merge any files that are missing
+                            // from the installed copy (e.g. a partially unpacked library),
+                            // but never overwrite existing files with backup versions.
+                            mergeMissingFiles(local_lib, local_lib_real_path);
                         }
                     }
                 }
@@ -543,6 +565,26 @@ public class BackupFactory {
         FileUtil.deleteFile(outFolder.getAbsolutePath());
 
         restoreSuccess = true;
+    }
+
+    private void mergeMissingFiles(File source, File destination) {
+        File[] files = source.listFiles();
+        if (files == null) return;
+
+        for (File file : files) {
+            File destFile = new File(destination, file.getName());
+
+            if (file.isDirectory()) {
+                if (!destFile.exists()) {
+                    destFile.mkdirs();
+                    copy(file, destFile);
+                } else {
+                    mergeMissingFiles(file, destFile);
+                }
+            } else if (!destFile.exists()) {
+                copy(file, destFile);
+            }
+        }
     }
 
     public String getError() {
