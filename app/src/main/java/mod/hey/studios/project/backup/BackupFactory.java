@@ -655,16 +655,19 @@ public class BackupFactory {
             return false;
         }
 
-        // Another restore may have created the destination meanwhile; prefer the existing file.
-        if (destination.exists() && !temp.delete()) {
-            return false;
+        // Another restore may have created the destination meanwhile; prefer the existing
+        // file. Deleting our temp copy is a success - the file the backup wanted is there.
+        if (destination.exists()) {
+            temp.delete();
+            return true;
         }
         return temp.renameTo(destination);
     }
 
     private boolean mergeMissingFiles(File source, File destination) {
         File[] files = source.listFiles();
-        if (files == null) return true;
+        // null = enumeration I/O error (an empty directory returns an empty array, not null)
+        if (files == null) return false;
 
         for (File file : files) {
             File destFile = new File(destination, file.getName());

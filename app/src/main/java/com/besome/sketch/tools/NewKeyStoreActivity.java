@@ -128,6 +128,9 @@ public class NewKeyStoreActivity extends BaseAppCompatActivity implements OnClic
                                 dn, validityInYears, aliasText, pass);
                         new oB().a(keystorePath, keystoreBytes);
                         runOnUiThread(() -> {
+                            // The user may have backed out during generation; a dead activity
+                            // can't show dialogs (BadTokenException on an invalid window token).
+                            if (isFinishing() || isDestroyed()) return;
                             binding.btnKeystoreSave.setEnabled(true);
                             binding.btnKeystoreCancel.setEnabled(true);
                             showDoneDialog(true, text);
@@ -135,6 +138,7 @@ public class NewKeyStoreActivity extends BaseAppCompatActivity implements OnClic
                     } catch (Exception e) {
                         e.printStackTrace();
                         runOnUiThread(() -> {
+                            if (isFinishing() || isDestroyed()) return;
                             binding.btnKeystoreSave.setEnabled(true);
                             binding.btnKeystoreCancel.setEnabled(true);
                             showDoneDialog(false, null);

@@ -119,14 +119,32 @@ public class Jx {
      */
     public String initializeLogicMethod() {
         StringBuilder sb = new StringBuilder();
-        if (!onCreateEventCode.isEmpty()) {
-            // Block scope: keeps variable declarations (e.g. _intent) from the event body
-            // from clashing with declarations emitted from the legacy duplicate key below.
-            sb.append("{").append(EOL).append(onCreateEventCode).append(EOL).append("}").append(EOL);
-        }
+        // Legacy duplicate first: before the #2120 fix the legacy body ran in
+        // initialize(Bundle), i.e. BEFORE the canonical event in initializeLogic().
+        // Preserve that relative order so field writes in one body are visible to the other.
         String legacyDuplicate = initializeLogic();
         if (!TextUtils.isEmpty(legacyDuplicate)) {
+            // Block scope: keeps variable declarations (e.g. _intent) from the legacy body
+            // from clashing with declarations emitted from the canonical event below.
             sb.append("{").append(EOL).append(legacyDuplicate).append(EOL).append("}").append(EOL);
+        }
+        if (!onCreateEventCode.isEmpty()) {
+            // Guard: the canonical body passes user-entered "add source directly" text
+            // through unchecked. If it contains a top-level return, any statement after it
+            // would be unreachable and the generated method would not compile - so in that
+            // (rare, legacy-key-only) case skip emitting the canonical body rather than
+            // emitting broken code. The canonical event is the live one; legacy duplicates
+            // only exist in projects created by older builds.
+            boolean canonicalReturns = false;
+            for (String line : onCreateEventCode.split("\n")) {
+                if (line.trim().equals("return;")) {
+                    canonicalReturns = true;
+                    break;
+                }
+            }
+            if (!canonicalReturns) {
+                sb.append("{").append(EOL).append(onCreateEventCode).append(EOL).append("}").append(EOL);
+            }
         }
         return sb.toString();
     }
