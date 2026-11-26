@@ -111,6 +111,24 @@ public class Jx {
         return Lx.j(new Fx(projectFileBean.getActivityName(), buildConfig, blocks, isViewBindingEnabled).a(), false);
     }
 
+    /**
+     * @return Code for the {@code initializeLogic()} method: the canonical "On activity create"
+     * event (stored under {@code onCreate_initializeLogic}) plus any blocks stored under the
+     * legacy duplicate key {@code initializeLogic_initializeLogic}, which a pre-fix
+     * {@code AddEventActivity} could create.
+     */
+    public String initializeLogicMethod() {
+        StringBuilder sb = new StringBuilder();
+        if (!onCreateEventCode.isEmpty()) {
+            sb.append(onCreateEventCode).append(EOL);
+        }
+        String legacyDuplicate = initializeLogic();
+        if (!TextUtils.isEmpty(legacyDuplicate)) {
+            sb.append(legacyDuplicate).append(EOL);
+        }
+        return sb.toString();
+    }
+
     private void extraVariables() {
         for (Map.Entry<String, ArrayList<BlockBean>> blocks : jC.a(projectDataManager.a).b(projectFileBean.getJavaName()).entrySet()) {
             for (BlockBean block : blocks.getValue()) {
@@ -440,10 +458,9 @@ public class Jx {
         } else {
             sb.append("private void initialize(Bundle _savedInstanceState) {");
         }
-        if (!TextUtils.isEmpty(initializeLogic())) {
-            sb.append(EOL);
-            sb.append(initializeLogic());
-        }
+        // Note: initializeLogic() blocks belong in the initializeLogic() method, not here.
+        // The default "On activity create" event is emitted into initializeLogic(); see
+        // initializeLogicMethod().
 
         for (String value : initializeMethodCode) {
             if (!value.isEmpty()) {
@@ -491,8 +508,8 @@ public class Jx {
         sb.append("}").append(EOL);
         sb.append(EOL);
         sb.append("private void initializeLogic() {").append(EOL);
-        if (!onCreateEventCode.isEmpty()) {
-            sb.append(onCreateEventCode).append(EOL);
+        if (!TextUtils.isEmpty(initializeLogicMethod())) {
+            sb.append(initializeLogicMethod()).append(EOL);
         }
         sb.append("}").append(EOL);
 

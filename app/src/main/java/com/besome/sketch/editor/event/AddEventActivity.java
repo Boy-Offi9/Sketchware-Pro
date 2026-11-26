@@ -107,6 +107,13 @@ public class AddEventActivity extends BaseAppCompatActivity implements View.OnCl
         eventsToAdd.clear();
 
         for (var activityEvent : oq.getAllActivityEvents()) {
+            // "initializeLogic" is the implicit default event (targetId "onCreate") that
+            // always exists; offering it again here would create a duplicate event whose
+            // blocks compile into initialize(Bundle) instead of initializeLogic().
+            if (activityEvent.equals("initializeLogic")) {
+                continue;
+            }
+
             boolean exists = false;
             for (var existingEvent : jC.a(sc_id).g(projectFile.getJavaName())) {
                 if (existingEvent.eventType == EventBean.EVENT_TYPE_ACTIVITY
