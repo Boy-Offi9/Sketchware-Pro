@@ -204,9 +204,11 @@ public class BlocksManagerDetailsActivity extends BaseAppCompatActivity {
             case "Export":
                 Object paletteName = pallet_list.get(palette - 9).get("name");
                 if (paletteName instanceof String) {
-                    // Palette names are only checked for non-emptiness at creation; strip path
-                    // separators so "../../x" can't write outside the export directory.
-                    String safeName = ((String) paletteName).replace('/', '_').replace('\\', '_');
+                    String paletteString = (String) paletteName;
+                    // Palette names are only checked for non-emptiness at creation. Encode
+                    // reversibly: distinct names stay distinct files, while separators can't
+                    // enable path traversal ("\\s" is the escaped form of "/", "\\" of "\").
+                    String safeName = paletteString.replace("\\", "\\\\").replace("/", "\\s");
                     String exportTo = new File(BLOCK_EXPORT_PATH, safeName + ".json").getAbsolutePath();
                     FileUtil.writeFile(exportTo, getGson().toJson(filtered_list));
                     SketchwareUtil.toast("Successfully exported blocks to:\n" + exportTo, Toast.LENGTH_LONG);
@@ -455,12 +457,20 @@ public class BlocksManagerDetailsActivity extends BaseAppCompatActivity {
         builder.show();
     }
 
+    /** @return import toast text: duplicate skips are counted only among selected blocks. */
+    private static String importResultMessage(int[] result) {
+        int added = result[0];
+        int skipped = result[1];
+        return skipped == 0 ? "Imported successfully"
+                : added + " imported, " + skipped + " skipped (name already exists)";
+    }
+
     /**
      * Appends the selected imported blocks to {@link #all_blocks_list}, skipping any whose
      * name already exists - block lookup is first-match-by-name, so duplicates silently
-     * shadowed the user's own definition. @return the number of blocks actually added.
+     * shadowed the user's own definition. @return {{added, duplicateSkipped}}.
      */
-    private int appendNonDuplicateBlocks(ArrayList<HashMap<String, Object>> blocks, java.util.function.IntPredicate selector) {
+    private int[] appendNonDuplicateBlocks(ArrayList<HashMap<String, Object>> blocks, java.util.function.IntPredicate selector) {
         java.util.HashSet<String> existingNames = new java.util.HashSet<>();
         for (HashMap<String, Object> block : all_blocks_list) {
             Object name = block.get("name");
@@ -469,11 +479,13 @@ public class BlocksManagerDetailsActivity extends BaseAppCompatActivity {
             }
         }
         int added = 0;
+        int duplicateSkipped = 0;
         for (int i = 0; i < blocks.size(); i++) {
             if (selector.test(i)) {
                 HashMap<String, Object> map = blocks.get(i);
                 Object name = map.get("name");
                 if (name instanceof String && existingNames.contains(name)) {
+                    duplicateSkipped++;
                     continue;
                 }
                 map.put("palette", String.valueOf(palette));
@@ -484,7 +496,7 @@ public class BlocksManagerDetailsActivity extends BaseAppCompatActivity {
                 added++;
             }
         }
-        return added;
+        return new int[]{added, duplicateSkipped};
     }
 
     private void _importBlocks(ArrayList<HashMap<String, Object>> blocks) {
@@ -510,22 +522,22 @@ public class BlocksManagerDetailsActivity extends BaseAppCompatActivity {
                         }
                     })
                     .setPositiveButton("Import", (dialog, which) -> {
-                        int added = appendNonDuplicateBlocks(blocks, toAdd::contains);
+                        int[] result = appendNonDuplicateBlocks(blocks, toAdd::contains);
                         FileUtil.writeFile(blocks_path, getGson().toJson(all_blocks_list));
                         _refreshLists();
-                        SketchwareUtil.toast(added == blocks.size() ? "Imported successfully" : added + " imported, " + (blocks.size() - added) + " skipped (name already exists)");
+                        SketchwareUtil.toast(importResultMessage(result));
                     })
                     .setNegativeButton("Reverse", (dialog, which) -> {
-                        int added = appendNonDuplicateBlocks(blocks, i -> !toAdd.contains(i));
+                        int[] result = appendNonDuplicateBlocks(blocks, i -> !toAdd.contains(i));
                         FileUtil.writeFile(blocks_path, getGson().toJson(all_blocks_list));
                         _refreshLists();
-                        SketchwareUtil.toast(added == blocks.size() ? "Imported successfully" : added + " imported, " + (blocks.size() - added) + " skipped (name already exists)");
+                        SketchwareUtil.toast(importResultMessage(result));
                     })
                     .setNeutralButton("All", (dialog, which) -> {
-                        int added = appendNonDuplicateBlocks(blocks, i -> true);
+                        int[] result = appendNonDuplicateBlocks(blocks, i -> true);
                         FileUtil.writeFile(blocks_path, getGson().toJson(all_blocks_list));
                         _refreshLists();
-                        SketchwareUtil.toast(added == blocks.size() ? "Imported successfully" : added + " imported, " + (blocks.size() - added) + " skipped (name already exists)");
+                        SketchwareUtil.toast(importResultMessage(result));
                     })
                     .show();
         } catch (Exception e) {

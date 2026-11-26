@@ -621,17 +621,31 @@ public class BackupFactory {
 
             if (local_libs.exists()) {
                 File[] local_libs_content = local_libs.listFiles();
-                if (local_libs_content != null) {
+                // null = enumeration I/O error (an empty directory returns an empty array).
+                // Skipping silently would publish a project with missing libraries.
+                if (local_libs_content == null) {
+                    error = "couldn't list extracted local libraries";
+                    restoreSuccess = false;
+                    rollbackRestoreArtifacts(preExistingData, resourceRollbacks);
+                    FileUtil.deleteFile(outFolder.getAbsolutePath());
+                    return false;
+                }
 
                     for (File local_lib : local_libs_content) {
 
                         File local_lib_real_path = new File(getAllLocalLibsDir(), local_lib.getName());
 
                         if (!local_lib_real_path.exists()) {
-                            local_lib_real_path.mkdirs();
-                            if (!copy(local_lib, local_lib_real_path)) {
+                            // Stage into a temp dir and publish with a rename: a failed
+                            // straight copy leaves a partial library in the live dir, and a
+                            // retry's mergeMissingFiles() would then skip the corrupt file.
+                            File staging = new File(getAllLocalLibsDir(), local_lib.getName() + ".restore_tmp");
+                            FileUtil.deleteFile(staging.getAbsolutePath());
+                            if (!copy(local_lib, staging)
+                                    || !staging.renameTo(local_lib_real_path)) {
                                 error = "couldn't restore local library: " + local_lib.getName();
                                 restoreSuccess = false;
+                                FileUtil.deleteFile(staging.getAbsolutePath());
                                 rollbackRestoreArtifacts(preExistingData, resourceRollbacks);
                                 FileUtil.deleteFile(outFolder.getAbsolutePath());
                                 return false;
@@ -649,7 +663,6 @@ public class BackupFactory {
                             }
                         }
                     }
-                }
             }
         }
 

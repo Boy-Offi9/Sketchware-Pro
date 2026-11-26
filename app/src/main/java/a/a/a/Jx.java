@@ -451,7 +451,13 @@ public class Jx {
             // Adds initializeLogic() call too, don't worry
             sb.append(permissionManager.writePermission(buildConfig.g, buildConfig.a(projectFileBean.getActivityName()).c));
         } else {
-            sb.append("initializeLogic(_savedInstanceState, _view);").append(EOL);
+            if (isViewBindingEnabled) {
+                // Binding mode has no `_view` variable in onCreateView (it declares
+                // `binding` instead) - pass the root from the binding.
+                sb.append("initializeLogic(_savedInstanceState, binding.getRoot());").append(EOL);
+            } else {
+                sb.append("initializeLogic(_savedInstanceState, _view);").append(EOL);
+            }
             if (isViewBindingEnabled) {
                 sb.append("return binding.getRoot();").append(EOL);
             } else {

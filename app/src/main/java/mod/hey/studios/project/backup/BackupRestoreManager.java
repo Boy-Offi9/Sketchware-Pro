@@ -175,6 +175,9 @@ public class BackupRestoreManager {
                     .setPositiveButton("Copy", (dialog, which) -> doRestore(backupFilePath, true, next))
                     .setNegativeButton("Don't copy", (dialog, which) -> doRestore(backupFilePath, false, next))
                     .setNeutralButton(R.string.common_word_cancel, (dialog, which) -> next.run())
+                    // Back also cancels the dialog without a button callback; the queue must
+                    // advance (Cancel semantics) or the remaining backups would be stranded.
+                    .setOnCancelListener(dialog -> next.run())
                     .show();
         } else {
             doRestore(backupFilePath, false, next);

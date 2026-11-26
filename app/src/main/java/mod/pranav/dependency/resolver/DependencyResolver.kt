@@ -261,7 +261,9 @@ class DependencyResolver(
         }
 
         callback.onTaskCompleted(
-            dependency.getAllDependencies().map { "${it.artifactId}-v${it.version}" })
+            // dirName, not the bare name: downloads/compilation write into -api<min> dirs
+            // since the DEX cache split; the completion callback must name the same dirs.
+            dependency.getAllDependencies().map { dirName(it) })
     }
 
     private fun findPackageName(path: String, defaultValue: String): String {
