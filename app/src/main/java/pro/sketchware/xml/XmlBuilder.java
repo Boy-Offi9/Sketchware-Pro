@@ -48,6 +48,11 @@ public class XmlBuilder {
     }
 
     public void setNodeValue(String value) {
+        // Escape XML entities: values (app names, strings) come from user input and are
+        // written raw into generated XML. Escape & first so existing entities survive.
+        if (value != null) {
+            value = value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+        }
         nodeValue = value;
     }
 

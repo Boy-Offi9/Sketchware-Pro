@@ -282,6 +282,10 @@ class DependencyResolver(
         zipFile.use { zip ->
             zip.entries().asSequence().forEach { entry ->
                 val entryDestination = path.parent.resolve(entry.name)
+                // Zip-slip guard: entries from downloaded AARs must stay inside the library dir.
+                if (!entryDestination.normalize().startsWith(path.parent.normalize())) {
+                    throw SecurityException("zip entry escapes destination: ${entry.name}")
+                }
                 if (entry.isDirectory) {
                     Files.createDirectories(entryDestination)
                 } else {

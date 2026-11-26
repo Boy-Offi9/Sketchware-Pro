@@ -669,7 +669,7 @@ public class ExportProjectActivity extends BaseAppCompatActivity {
                                 wq.j(),
                                 signingKeystorePassword,
                                 signingAliasName,
-                                signingKeystorePassword,
+                                signingAliasPassword,
                                 signingAlgorithm,
                                 builder.yq.unsignedAlignedApkPath,
                                 outputLocation

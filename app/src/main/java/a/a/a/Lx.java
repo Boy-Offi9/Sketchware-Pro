@@ -689,7 +689,12 @@ public class Lx {
                     break;
 
                 case "MapView":
-                    fieldDeclaration += "\r\nprivate GoogleMapController _" + typeInstanceName + "_controller;";
+                    // Match the listener-site naming: in view-binding mode listeners derive the
+                    // controller name from the camelCase binding parameter, so declare the same.
+                    String mapViewInstanceName = isViewBindingEnabled
+                            ? ViewBindingBuilder.generateParameterFromId(typeInstanceName)
+                            : typeInstanceName;
+                    fieldDeclaration += "\r\nprivate GoogleMapController _" + mapViewInstanceName + "_controller;";
                     break;
 
                 case "Videos":

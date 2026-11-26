@@ -15,7 +15,7 @@ public class MoreblockValidator extends MB {
 
     private final String[] reservedKeywords;
     private final ArrayList<String> registeredVariables;
-    private final Pattern j = Pattern.compile("^[a-zA-Z]\\w*(?:\\[[\\w\\[\\],<>?| ]*])?$");
+    private final Pattern j = Pattern.compile("^[a-zA-Z]\\w*$");
     private String[] eventNames;
     private String i;
 
@@ -28,6 +28,20 @@ public class MoreblockValidator extends MB {
 
     public void a(String[] strArr) {
         eventNames = strArr;
+    }
+
+    /**
+     * Registered moreblock names carry a "[Type]" return-type suffix (e.g. "foo[String]").
+     * Compare on the bare name, otherwise typing "foo" when "foo[String]" exists - or vice
+     * versa - bypassed the duplicate check and produced duplicate generated methods.
+     */
+    private boolean isRegisteredMoreblockName(String name) {
+        for (String registered : registeredVariables) {
+            if (ReturnMoreblockManager.getMbName(registered).equals(name)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -44,7 +58,7 @@ public class MoreblockValidator extends MB {
             if (i != null && !i.isEmpty() && name.equals(i)) {
                 b.setError(null);
                 d = true;
-            } else if (registeredVariables.contains(name)) {
+            } else if (isRegisteredMoreblockName(name)) {
                 b.setError(a.getString(R.string.common_message_name_unavailable, 0));
                 d = false;
             } else {

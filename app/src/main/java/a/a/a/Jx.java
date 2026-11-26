@@ -555,7 +555,10 @@ public class Jx {
             sb.append("}").append(EOL);
         }
 
-        if (projectFileBean.hasActivityOption(ProjectFileBean.OPTION_ACTIVITY_DRAWER) && !isViewBindingEnabled) {
+        if (projectFileBean.hasActivityOption(ProjectFileBean.OPTION_ACTIVITY_DRAWER)) {
+            // Hx.addLifecycleEvent translates the id for view binding, and drawer blocks
+            // (e.g. openDrawer) already work with binding.drawer - so emit onBackPressed
+            // in binding mode too instead of silently dropping back-press-closes-drawer.
             eventManager.addLifecycleEvent("onBackPressed", "DrawerLayout", "_drawer");
         }
 

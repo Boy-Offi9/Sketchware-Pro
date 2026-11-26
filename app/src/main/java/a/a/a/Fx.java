@@ -1186,7 +1186,7 @@ public class Fx {
                 }
                 break;
             case "fileutilisdir":
-                if (!opcode.equals("\"\"")) {
+                if (!params.get(0).equals("\"\"")) {
                     opcode = String.format("FileUtil.isDirectory(%s)", params.get(0));
                 }
                 break;
