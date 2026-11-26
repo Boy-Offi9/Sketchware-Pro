@@ -140,9 +140,13 @@ public class AddEventActivity extends BaseAppCompatActivity implements View.OnCl
                     } else {
                         exists = false;
                         for (var existingEvent : jC.a(sc_id).g(projectFile.getJavaName())) {
-                            if (existingEvent.eventType == EventBean.EVENT_TYPE_VIEW
+                            if ((existingEvent.eventType == EventBean.EVENT_TYPE_VIEW
+                                    || existingEvent.eventType == EventBean.EVENT_TYPE_DRAWER_VIEW)
                                     && view.id.equals(existingEvent.targetId)
                                     && viewEvent.equals(existingEvent.eventName)) {
+                                // A drawer view and a main-XML view can share the same id; both
+                                // event types compile to the same <id>_<event> logic key, so treat
+                                // a match of either type as already-existing to avoid a collision.
                                 exists = true;
                                 break;
                             }
@@ -177,6 +181,7 @@ public class AddEventActivity extends BaseAppCompatActivity implements View.OnCl
         if (projectFile.hasActivityOption(ProjectFileBean.OPTION_ACTIVITY_FAB) && (fab = jC.a(sc_id).h(projectFile.getXmlName())) != null) {
             for (String fabEvent : oq.getEventsForClass(fab.getClassInfo())) {
                 boolean exists = false;
+                Set<String> toNotAdd = new Ox(new jq(), projectFile).readAttributesToReplace(fab);
                 for (var existingFabEvent : jC.a(sc_id).g(projectFile.getJavaName())) {
                     if (existingFabEvent.eventType == EventBean.EVENT_TYPE_VIEW
                             && fab.id.equals(existingFabEvent.targetId)
@@ -185,7 +190,7 @@ public class AddEventActivity extends BaseAppCompatActivity implements View.OnCl
                         break;
                     }
                 }
-                if (!exists) {
+                if (!exists && !toNotAdd.contains("android:id")) {
                     addableViewEvents.add(new EventBean(EventBean.EVENT_TYPE_VIEW, fab.type, fab.id, fabEvent));
                 }
             }
@@ -198,9 +203,11 @@ public class AddEventActivity extends BaseAppCompatActivity implements View.OnCl
                     for (String drawerViewEvent : oq.getEventsForClass(drawerView.getClassInfo())) {
                         boolean exists = false;
                         for (var existingEvent : jC.a(sc_id).g(projectFile.getJavaName())) {
-                            if (existingEvent.eventType == EventBean.EVENT_TYPE_DRAWER_VIEW
+                            if ((existingEvent.eventType == EventBean.EVENT_TYPE_DRAWER_VIEW
+                                    || existingEvent.eventType == EventBean.EVENT_TYPE_VIEW)
                                     && drawerView.id.equals(existingEvent.targetId)
                                     && drawerViewEvent.equals(existingEvent.eventName)) {
+                                // Same <id>_<event> logic key as main-XML view events; avoid collisions
                                 exists = true;
                                 break;
                             }

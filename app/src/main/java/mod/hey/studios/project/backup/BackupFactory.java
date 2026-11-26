@@ -145,6 +145,18 @@ public class BackupFactory {
                 ZipEntry entry = zipFileEntries.nextElement();
                 String entryName = entry.getName();
                 File destFile = new File(destinationDir, entryName);
+                // Zip-slip guard: a malicious .swb can contain entries like "../mysc/list/<id>/project"
+                // that would escape the extraction folder and overwrite other projects' data.
+                try {
+                    if (!destFile.getCanonicalPath().startsWith(
+                            destinationDir.getCanonicalPath() + File.separator)) {
+                        Log.e(BackupFactory.class.getSimpleName(),
+                                "zip entry escapes destination: " + entryName);
+                        return false;
+                    }
+                } catch (IOException e) {
+                    return false;
+                }
                 File destinationParent = destFile.getParentFile();
                 if (destinationParent != null && !destinationParent.exists()) {
                     destinationParent.mkdirs();
@@ -212,18 +224,27 @@ public class BackupFactory {
     }
 
     //6.3.0 fix1
-    public static void copySafe(File source, File destination) {
+    public static boolean copySafe(File source, File destination) {
         if (!source.exists()) {
             destination.mkdirs();
             createNomediaFileIn(destination);
+            return true;
         } else {
-            copy(source, destination);
+            return copy(source, destination);
         }
     }
 
-    public static void copy(File source, File destination) {
+    /**
+     * Recursively copies a file or directory.
+     *
+     * @return true if everything was copied, false if reading or writing any file failed
+     * (in which case the destination may contain partial data).
+     */
+    public static boolean copy(File source, File destination) {
         if (source.isDirectory()) {
-            if (!destination.exists()) destination.mkdirs();
+            if (!destination.exists() && !destination.mkdirs() && !destination.exists()) {
+                return false;
+            }
 
             String[] files = source.list();
             if (files != null) {
@@ -232,12 +253,15 @@ public class BackupFactory {
                     File srcFile = new File(source, file);
                     File destFile = new File(destination, file);
 
-                    copy(srcFile, destFile);
+                    if (!copy(srcFile, destFile)) {
+                        return false;
+                    }
                 }
             }
+            return true;
         } else {
             //skip .nomedia files
-            if (source.getName().equals(".nomedia")) return;
+            if (source.getName().equals(".nomedia")) return true;
 
             try (InputStream in = new FileInputStream(source);
                  OutputStream out = new FileOutputStream(destination)) {
@@ -246,30 +270,26 @@ public class BackupFactory {
                 while ((length = in.read(buffer)) > 0) {
                     out.write(buffer, 0, length);
                 }
+                return true;
             } catch (IOException e) {
                 e.printStackTrace();
+                return false;
             }
         }
     }
 
     public static boolean zipContainsFile(String zipPath, String fileName) {
 
-        try {
-            ZipInputStream zp = new ZipInputStream(new FileInputStream(zipPath));
-
+        try (ZipInputStream zp = new ZipInputStream(new FileInputStream(zipPath))) {
             ZipEntry en;
 
             while ((en = zp.getNextEntry()) != null) {
                 String name = en.getName();
 
                 if (name.equals(fileName) || name.startsWith(fileName + File.separator)) {
-                    zp.close();
                     return true;
                 }
             }
-
-            zp.close();
-
         } catch (Exception ignored) {
         }
 
@@ -284,7 +304,11 @@ public class BackupFactory {
         String versionName = yB.c(lC.b(sc_id), "sc_ver_name");
         String versionCode = yB.c(lC.b(sc_id), "sc_ver_code");
         String pkgName = yB.c(lC.b(sc_id), "my_sc_pkg_name");
-        String projectNameOnly = project_name.replace("_d", "").replace(File.separator, "");
+        String projectNameOnly = project_name.replace(File.separator, "");
+        while (projectNameOnly.endsWith("_d")) {
+            projectNameOnly = projectNameOnly.substring(0, projectNameOnly.length() - 2);
+        }
+        String duplicateSuffix = project_name.substring(projectNameOnly.length());
         String finalFileName;
 
         try {
@@ -312,8 +336,8 @@ public class BackupFactory {
 
         // Init output zip file
         File outZip = new File(getBackupDir() + File.separator + projectNameOnly, finalFileName +
-                //Adds all the _d if exists. Otherwise its possible that there'll be an infinite loop
-                (project_name.contains("_d") ? project_name.replace(projectNameOnly, "") : "") + "." + EXTENSION);
+                //Adds the accumulated _d duplicate suffixes (if any)
+                duplicateSuffix + "." + EXTENSION);
 
         // Create a duplicate if already exists (impossible now :3)
         if (outZip.exists()) {
@@ -333,7 +357,11 @@ public class BackupFactory {
         File dataF = new File(outFolder, "data");
         FileUtil.makeDir(dataF.getAbsolutePath());
         //6.3.0 fix1
-        copySafe(getDataDir(), dataF);
+        if (!copySafe(getDataDir(), dataF)) {
+            error = "couldn't copy project data";
+            outPath = null;
+            return;
+        }
 
         // Copy res
         File resF = new File(outFolder, "resources");
@@ -344,7 +372,11 @@ public class BackupFactory {
             FileUtil.makeDir(resSubf.getAbsolutePath());
 
             //6.3.0 fix1
-            copySafe(getResDir(subfolder), resSubf);
+            if (!copySafe(getResDir(subfolder), resSubf)) {
+                error = "couldn't copy project resources (" + subfolder + ")";
+                outPath = null;
+                return;
+            }
 
             // Write an empty file inside each folder (except icons)
             if (!subfolder.equals("icons")) {
@@ -356,7 +388,11 @@ public class BackupFactory {
 
         // Copy project
         File projectF = new File(outFolder, "project");
-        copy(getProjectPath(), projectF);
+        if (!copy(getProjectPath(), projectF)) {
+            error = "couldn't copy the project file";
+            outPath = null;
+            return;
+        }
 
         // Find local libs used and include them in the backup
         if (backupLocalLibs) {
@@ -389,7 +425,11 @@ public class BackupFactory {
 
                         File f = new File(getAllLocalLibsDir(), name);
                         if (f.exists()) {
-                            copy(f, new File(libsF, name));
+                            if (!copy(f, new File(libsF, name))) {
+                                error = "couldn't copy local library: " + name;
+                                outPath = null;
+                                return;
+                            }
                         }
                     } catch (Exception e) {
                         Log.e(BackupFactory.class.getSimpleName(),
@@ -475,7 +515,7 @@ public class BackupFactory {
         restore(swbPath, name);
     }
 
-    private void restore(File swbPath, String name) {
+    private boolean restore(File swbPath, String name) {
 
         createBackupsFolder();
 
@@ -485,15 +525,15 @@ public class BackupFactory {
 
         // Create a duplicate if already exists
         if (outFolder.exists()) {
-            restore(swbPath, name + "_d");
-            return;
+            return restore(swbPath, name + "_d");
         }
 
         // Unzip
         if (!unzip(swbPath, outFolder)) {
             error = "couldn't unzip the backup";
             restoreSuccess = false;
-            return;
+            FileUtil.deleteFile(outFolder.getAbsolutePath());
+            return false;
         }
 
         // Init files
@@ -506,7 +546,8 @@ public class BackupFactory {
         if (map == null) {
             error = "couldn't read the project file";
             restoreSuccess = false;
-            return;
+            FileUtil.deleteFile(outFolder.getAbsolutePath());
+            return false;
         }
 
         // Put new sc_id
@@ -516,24 +557,40 @@ public class BackupFactory {
         if (!writeEncrypted(project, new Gson().toJson(map))) {
             error = "couldn't write to the project file";
             restoreSuccess = false;
-            return;
+            FileUtil.deleteFile(outFolder.getAbsolutePath());
+            return false;
         }
 
         // Copy data
-        copy(data, getDataDir());
+        if (!copy(data, getDataDir())) {
+            error = "couldn't copy project data";
+            restoreSuccess = false;
+            FileUtil.deleteFile(outFolder.getAbsolutePath());
+            return false;
+        }
 
         // Copy res
         for (String subfolder : resSubfolders) {
             File subf = new File(res, subfolder);
 
-            copySafe(subf, getResDir(subfolder));
+            if (!copySafe(subf, getResDir(subfolder))) {
+                error = "couldn't copy project resources (" + subfolder + ")";
+                restoreSuccess = false;
+                FileUtil.deleteFile(outFolder.getAbsolutePath());
+                return false;
+            }
         }
 
         // Create parent folder
         getProjectPath().getParentFile().mkdirs();
 
         // Copy project
-        copy(project, getProjectPath());
+        if (!copy(project, getProjectPath())) {
+            error = "couldn't copy the project file";
+            restoreSuccess = false;
+            FileUtil.deleteFile(outFolder.getAbsolutePath());
+            return false;
+        }
 
         // Copy local libs if they do not exist
         if (backupLocalLibs) {
@@ -557,7 +614,8 @@ public class BackupFactory {
                             if (!mergeMissingFiles(local_lib, local_lib_real_path)) {
                                 error = "failed to restore local library: " + local_lib.getName();
                                 restoreSuccess = false;
-                                return;
+                                FileUtil.deleteFile(outFolder.getAbsolutePath());
+                                return false;
                             }
                         }
                     }

@@ -419,9 +419,14 @@ public class LogicEditorActivity extends BaseAppCompatActivity implements View.O
                     if (!o.b(Helper.getText(radioButton))) {
                         if (!jC.a(scId).b(M.getJavaName(), Helper.getText(radioButton), id + "_" + eventName)) {
                             l(Helper.getText(radioButton));
+                            // list was not used anywhere and has been removed successfully
+                            v.dismiss();
+                            return;
                         }
+                        Toast.makeText(this, R.string.logic_editor_message_currently_used_list, Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(this, R.string.logic_editor_message_currently_used_list, Toast.LENGTH_SHORT).show();
                     }
-                    Toast.makeText(this, R.string.logic_editor_message_currently_used_list, Toast.LENGTH_SHORT).show();
                     return;
                 }
                 i++;
@@ -452,9 +457,14 @@ public class LogicEditorActivity extends BaseAppCompatActivity implements View.O
                     if (!o.c(Helper.getText(radioButton))) {
                         if (!jC.a(scId).c(M.getJavaName(), Helper.getText(radioButton), id + "_" + eventName)) {
                             m(Helper.getText(radioButton));
+                            // variable was not used anywhere and has been removed successfully
+                            v.dismiss();
+                            return;
                         }
+                        Toast.makeText(this, R.string.logic_editor_message_currently_used_variable, Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(this, R.string.logic_editor_message_currently_used_variable, Toast.LENGTH_SHORT).show();
                     }
-                    Toast.makeText(this, R.string.logic_editor_message_currently_used_variable, Toast.LENGTH_SHORT).show();
                     return;
                 }
                 i++;
@@ -637,7 +647,7 @@ public class LogicEditorActivity extends BaseAppCompatActivity implements View.O
                 String parameter = block.parameters.get(j);
                 if (parameter != null && !parameter.isEmpty() && parameter.charAt(0) == '@') {
                     int parameterId = Integer.parseInt(parameter.substring(1));
-                    int parameterAsBlockId = hashMap.containsKey(parameterId) ? hashMap.get(parameterId) : 0;
+                    int parameterAsBlockId = hashMap.containsKey(parameterId) ? hashMap.get(parameterId) : -1;
                     if (parameterAsBlockId >= 0) {
                         block.parameters.set(j, '@' + String.valueOf(parameterAsBlockId));
                     } else {
@@ -1904,6 +1914,7 @@ public class LogicEditorActivity extends BaseAppCompatActivity implements View.O
         }
         if (!super.isStoragePermissionGranted()) {
             finish();
+            return;
         }
         Parcelable parcelable;
         if (savedInstanceState == null) {

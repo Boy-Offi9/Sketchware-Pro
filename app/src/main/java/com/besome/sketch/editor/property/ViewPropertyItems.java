@@ -932,21 +932,17 @@ public class ViewPropertyItems extends LinearLayout implements Kw, View.OnClickL
                     }
                 }
 
+                // Remap EVERY stored logic key whose prefix is the old view id, not just the
+                // event names the (possibly converted) widget class currently offers. Events
+                // created under a previous widget type would otherwise keep their logic under
+                // <preId>_<event> while the EventBean.targetId moves to the new id, silently
+                // dropping the user's blocks from the generated code (Hx looks up <newId>_<event>).
                 HashMap<String, ArrayList<BlockBean>> beanMap = jC.a(sc_id).b(e.getJavaName());
 
-                for (String events : oq.getEventsForClass(bean.getClassInfo())) {
-                    StringBuilder eventBodyBuilder = new StringBuilder();
-                    eventBodyBuilder.append(bean.preId);
-                    eventBodyBuilder.append("_");
-                    eventBodyBuilder.append(events);
-                    String body = eventBodyBuilder.toString();
-                    if (beanMap.containsKey(body)) {
-                        eventBodyBuilder = new StringBuilder();
-                        eventBodyBuilder.append(bean.id);
-                        eventBodyBuilder.append("_");
-                        eventBodyBuilder.append(events);
-                        beanMap.put(eventBodyBuilder.toString(), beanMap.get(body));
-                        beanMap.remove(body);
+                for (String key : new ArrayList<>(beanMap.keySet())) {
+                    if (key.startsWith(bean.preId + "_")) {
+                        String remapped = bean.id + key.substring(bean.preId.length());
+                        beanMap.put(remapped, beanMap.remove(key));
                     }
                 }
 
