@@ -253,7 +253,10 @@ public class AddResourceActivity extends BaseDialogActivity implements View.OnCl
         editingImageBean = intent.getParcelableExtra("edit_target");
         editing = editingImageBean != null;
 
-        imageValidator = isCollectionMode && editing
+        // Pass the edited image's own name as the validator exclusion in project mode too,
+        // otherwise the validator rejects the (disabled, unchanged) name against the
+        // reserved-names list containing itself and saving an edit is impossible.
+        imageValidator = editing
                 ? new PB(this, binding.tiInput, uq.b, getReservedImageNames(), editingImageBean.resName)
                 : new PB(this, binding.tiInput, uq.b, getReservedImageNames());
         imageValidator.a(1);

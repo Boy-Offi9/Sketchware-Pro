@@ -34,7 +34,7 @@ import pro.sketchware.utility.ThemeUtils;
 import pro.sketchware.utility.UI;
 
 public class ViewSelectorActivity extends BaseAppCompatActivity {
-    private final int[] x = new int[19];
+    private final int[] x = new int[99];
     private final int TAB_ACTIVITY = ProjectFileBean.PROJECT_FILE_TYPE_ACTIVITY;
     private final int TAB_CUSTOM_VIEW = ProjectFileBean.PROJECT_FILE_TYPE_CUSTOM_VIEW;
     private ViewSelectorAdapter viewSelectorAdapter;
@@ -432,7 +432,17 @@ public class ViewSelectorActivity extends BaseAppCompatActivity {
                 itemBinding.imgPresetSetting.setOnClickListener(v -> {
                     if (!mB.a()) {
                         selectedItem = getLayoutPosition();
-                        int requestCode = a(jC.b(sc_id).b().get(getLayoutPosition()));
+                        // Pick the list matching the current tab: the custom-view tab holds
+                        // its beans in c(), not in the activities list b().
+                        ArrayList<ProjectFileBean> presetList = switch (selectedTab) {
+                            case TAB_ACTIVITY -> jC.b(sc_id).b();
+                            case TAB_CUSTOM_VIEW -> jC.b(sc_id).c();
+                            default -> null;
+                        };
+                        if (presetList == null || getLayoutPosition() >= presetList.size()) {
+                            return;
+                        }
+                        int requestCode = a(presetList.get(getLayoutPosition()));
                         Intent intent = new Intent(getApplicationContext(), PresetSettingActivity.class);
                         intent.putExtra("request_code", requestCode);
                         intent.putExtra("edit_mode", true);

@@ -49,7 +49,7 @@ public class ManageViewActivity extends BaseAppCompatActivity implements OnClick
     private static final int TAB_COUNT = 2;
     private static final int REQUEST_CODE_ADD_ACTIVITY = 264;
     private static final int REQUEST_CODE_ADD_CUSTOM_VIEW = 266;
-    private final int[] x = new int[19];
+    private final int[] x = new int[99];
     // signature mustn't be changed: used in La/a/a/Bw;->a(Landroidx/recyclerview/widget/RecyclerView;II)V, La/a/a/tw;->a(Landroidx/recyclerview/widget/RecyclerView;II)V
     public FloatingActionButton s;
     private ManageViewBinding binding;
