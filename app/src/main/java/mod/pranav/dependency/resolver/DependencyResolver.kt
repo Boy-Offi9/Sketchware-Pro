@@ -31,7 +31,9 @@ class DependencyResolver(
     private val artifactId: String,
     private val version: String,
     private val skipDependencies: Boolean,
-    private val buildSettings: BuildSettings
+    private val buildSettings: BuildSettings,
+    /** The consuming project's minSdkVersion; drives D8 desugaring of library bytecode. */
+    private val minApiLevel: Int = 21
 ) {
     companion object {
         private const val GOOGLE_MAVEN_URL = "https://dl.google.com/dl/android/maven2"
@@ -298,6 +300,7 @@ class DependencyResolver(
         Files.createDirectories(jarFile.parent)
         D8.run(
             D8Command.builder().setIntermediate(true).setMode(CompilationMode.RELEASE)
+                .setMinApiLevel(minApiLevel)
                 .addProgramFiles(jarFile).addLibraryFiles(libraryJars).addClasspathFiles(jars)
                 .setOutput(jarFile.parent, OutputMode.DexIndexed).build()
         )
