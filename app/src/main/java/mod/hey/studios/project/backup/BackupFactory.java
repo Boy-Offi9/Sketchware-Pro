@@ -257,8 +257,10 @@ public class BackupFactory {
                         return false;
                     }
                 }
+                return true;
             }
-            return true;
+            // null = enumeration I/O error (an empty directory returns an empty array)
+            return false;
         } else {
             //skip .nomedia files
             if (source.getName().equals(".nomedia")) return true;
@@ -561,10 +563,15 @@ public class BackupFactory {
             return false;
         }
 
-        // Copy data
+        // Copy data.
+        // Snapshot pre-existing children so a failed copy can be rolled back: leaving
+        // half-copied sc_id folders in the live data dir leaks files into the next
+        // project that reuses the same id (copy never deletes destination-only files).
+        java.util.HashSet<String> preExistingData = listChildNames(getDataDir());
         if (!copy(data, getDataDir())) {
             error = "couldn't copy project data";
             restoreSuccess = false;
+            rollbackNewChildren(getDataDir(), preExistingData);
             FileUtil.deleteFile(outFolder.getAbsolutePath());
             return false;
         }
@@ -572,10 +579,14 @@ public class BackupFactory {
         // Copy res
         for (String subfolder : resSubfolders) {
             File subf = new File(res, subfolder);
+            File resDir = getResDir(subfolder);
+            java.util.HashSet<String> preExistingRes = listChildNames(resDir);
 
-            if (!copySafe(subf, getResDir(subfolder))) {
+            if (!copySafe(subf, resDir)) {
                 error = "couldn't copy project resources (" + subfolder + ")";
                 restoreSuccess = false;
+                rollbackNewChildren(resDir, preExistingRes);
+                rollbackNewChildren(getDataDir(), preExistingData);
                 FileUtil.deleteFile(outFolder.getAbsolutePath());
                 return false;
             }
@@ -585,9 +596,14 @@ public class BackupFactory {
         getProjectPath().getParentFile().mkdirs();
 
         // Copy project
+        boolean projectExisted = getProjectPath().exists();
         if (!copy(project, getProjectPath())) {
             error = "couldn't copy the project file";
             restoreSuccess = false;
+            if (!projectExisted) {
+                FileUtil.deleteFile(getProjectPath().getAbsolutePath());
+            }
+            rollbackNewChildren(getDataDir(), preExistingData);
             FileUtil.deleteFile(outFolder.getAbsolutePath());
             return false;
         }
@@ -627,6 +643,7 @@ public class BackupFactory {
         FileUtil.deleteFile(outFolder.getAbsolutePath());
 
         restoreSuccess = true;
+        return true;
     }
 
     /**
@@ -662,6 +679,29 @@ public class BackupFactory {
             return true;
         }
         return temp.renameTo(destination);
+    }
+
+    /** @return names of the direct children of {@code dir}, or an empty set if it doesn't exist. */
+    private static java.util.HashSet<String> listChildNames(File dir) {
+        java.util.HashSet<String> names = new java.util.HashSet<>();
+        File[] children = dir.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                names.add(child.getName());
+            }
+        }
+        return names;
+    }
+
+    /** Best-effort rollback: deletes direct children of {@code dir} that weren't in {@code preExisting}. */
+    private static void rollbackNewChildren(File dir, java.util.HashSet<String> preExisting) {
+        File[] children = dir.listFiles();
+        if (children == null) return;
+        for (File child : children) {
+            if (!preExisting.contains(child.getName())) {
+                FileUtil.deleteFile(child.getAbsolutePath());
+            }
+        }
     }
 
     private boolean mergeMissingFiles(File source, File destination) {

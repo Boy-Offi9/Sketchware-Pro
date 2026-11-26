@@ -140,13 +140,9 @@ public class AddEventActivity extends BaseAppCompatActivity implements View.OnCl
                     } else {
                         exists = false;
                         for (var existingEvent : jC.a(sc_id).g(projectFile.getJavaName())) {
-                            if ((existingEvent.eventType == EventBean.EVENT_TYPE_VIEW
-                                    || existingEvent.eventType == EventBean.EVENT_TYPE_DRAWER_VIEW)
+                            if (existingEvent.eventType == EventBean.EVENT_TYPE_VIEW
                                     && view.id.equals(existingEvent.targetId)
                                     && viewEvent.equals(existingEvent.eventName)) {
-                                // A drawer view and a main-XML view can share the same id; both
-                                // event types compile to the same <id>_<event> logic key, so treat
-                                // a match of either type as already-existing to avoid a collision.
                                 exists = true;
                                 break;
                             }
@@ -203,17 +199,20 @@ public class AddEventActivity extends BaseAppCompatActivity implements View.OnCl
                     for (String drawerViewEvent : oq.getEventsForClass(drawerView.getClassInfo())) {
                         boolean exists = false;
                         for (var existingEvent : jC.a(sc_id).g(projectFile.getJavaName())) {
-                            if ((existingEvent.eventType == EventBean.EVENT_TYPE_DRAWER_VIEW
-                                    || existingEvent.eventType == EventBean.EVENT_TYPE_VIEW)
+                            if (existingEvent.eventType == EventBean.EVENT_TYPE_DRAWER_VIEW
                                     && drawerView.id.equals(existingEvent.targetId)
                                     && drawerViewEvent.equals(existingEvent.eventName)) {
-                                // Same <id>_<event> logic key as main-XML view events; avoid collisions
                                 exists = true;
                                 break;
                             }
                         }
                         if (!exists && !toNotAdd.contains("android:id")) {
-                            addableDrawerViewEvents.add(new EventBean(EventBean.EVENT_TYPE_DRAWER_VIEW, drawerView.type, drawerView.id, drawerViewEvent));
+                            // Namespace the logic key: a main-XML view and a drawer view can
+                            // share the same id, and both used to compile into the single
+                            // <id>_<event> logic (blocks duplicated into both listeners,
+                            // editing/deleting one destroying the other). The "_drawer_" prefix
+                            // keeps the keys separate; Hx strips it when resolving the Event.
+                            addableDrawerViewEvents.add(new EventBean(EventBean.EVENT_TYPE_DRAWER_VIEW, drawerView.type, "_drawer_" + drawerView.id, drawerViewEvent));
                         }
                     }
                 }

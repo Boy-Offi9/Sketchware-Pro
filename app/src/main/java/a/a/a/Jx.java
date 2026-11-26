@@ -124,27 +124,26 @@ public class Jx {
         // Preserve that relative order so field writes in one body are visible to the other.
         String legacyDuplicate = initializeLogic();
         if (!TextUtils.isEmpty(legacyDuplicate)) {
-            // Block scope: keeps variable declarations (e.g. _intent) from the legacy body
-            // from clashing with declarations emitted from the canonical event below.
-            sb.append("{").append(EOL).append(legacyDuplicate).append(EOL).append("}").append(EOL);
-        }
-        if (!onCreateEventCode.isEmpty()) {
-            // Guard: the canonical body passes user-entered "add source directly" text
-            // through unchecked. If it contains a top-level return, any statement after it
-            // would be unreachable and the generated method would not compile - so in that
-            // (rare, legacy-key-only) case skip emitting the canonical body rather than
-            // emitting broken code. The canonical event is the live one; legacy duplicates
-            // only exist in projects created by older builds.
-            boolean canonicalReturns = false;
-            for (String line : onCreateEventCode.split("\n")) {
+            // Guard: the legacy duplicate key predates the #2120 fix and only exists in old
+            // projects. Its body passes user-entered "add source directly" text through
+            // unchecked; a top-level return in it would make the following canonical body
+            // unreachable and the generated method uncompilable - skip the legacy body
+            // in that case rather than emitting broken code.
+            boolean legacyReturns = false;
+            for (String line : legacyDuplicate.split("\n")) {
                 if (line.trim().equals("return;")) {
-                    canonicalReturns = true;
+                    legacyReturns = true;
                     break;
                 }
             }
-            if (!canonicalReturns) {
-                sb.append("{").append(EOL).append(onCreateEventCode).append(EOL).append("}").append(EOL);
+            if (!legacyReturns) {
+                // Block scope: keeps variable declarations (e.g. _intent) from the legacy body
+                // from clashing with declarations emitted from the canonical event below.
+                sb.append("{").append(EOL).append(legacyDuplicate).append(EOL).append("}").append(EOL);
             }
+        }
+        if (!onCreateEventCode.isEmpty()) {
+            sb.append("{").append(EOL).append(onCreateEventCode).append(EOL).append("}").append(EOL);
         }
         return sb.toString();
     }

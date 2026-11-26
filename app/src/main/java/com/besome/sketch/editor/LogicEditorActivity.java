@@ -863,10 +863,13 @@ public class LogicEditorActivity extends BaseAppCompatActivity implements View.O
                             String xmlName = M.getXmlName();
                             if (eventName.equals("onBindCustomView")) {
                                 var eC = jC.a(scId);
-                                var view = eC.c(xmlName, id);
+                                // Drawer-view events carry a "_drawer_" prefix on the id (namespaced
+                                // logic keys); strip it for view lookups.
+                                String lookupId = id.startsWith("_drawer_") ? id.substring("_drawer_".length()) : id;
+                                var view = eC.c(xmlName, lookupId);
                                 if (view == null) {
                                     // Event is of a Drawer View
-                                    view = eC.c("_drawer_" + xmlName, id);
+                                    view = eC.c("_drawer_" + xmlName, lookupId);
                                 }
                                 String customView = view.customView;
                                 if (customView != null) {
@@ -1565,9 +1568,11 @@ public class LogicEditorActivity extends BaseAppCompatActivity implements View.O
 
         if (eventName.equals("onBindCustomView")) {
             var eC = jC.a(scId);
-            var view = eC.c(xmlName, id);
+            // Drawer-view events carry a "_drawer_" prefix on the id (namespaced logic keys).
+            String lookupId = id.startsWith("_drawer_") ? id.substring("_drawer_".length()) : id;
+            var view = eC.c(xmlName, lookupId);
             if (view == null) {
-                view = eC.c("_drawer_" + xmlName, id);
+                view = eC.c("_drawer_" + xmlName, lookupId);
             }
             if (view != null && view.customView != null) {
                 xmlName = ProjectFileBean.getXmlName(view.customView);
