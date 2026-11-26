@@ -232,7 +232,19 @@ public class ProjectsAdapter extends RecyclerView.Adapter<ProjectsAdapter.Projec
             lC.a(activity, scId);
             activity.runOnUiThread(() -> {
                 progressDialog.dismiss();
-                shownProjects.remove(position);
+                // Remove by identity of the project, not by the (possibly stale) list
+                // position captured when the dialog opened: the list may have been
+                // filtered/reordered in the meantime.
+                int currentIndex = -1;
+                for (int i = 0; i < shownProjects.size(); i++) {
+                    if (shownProjects.get(i) == projectMap) {
+                        currentIndex = i;
+                        break;
+                    }
+                }
+                if (currentIndex >= 0) {
+                    shownProjects.remove(currentIndex);
+                }
                 notifyDataSetChanged();
                 allProjects.remove(projectMap);
             });

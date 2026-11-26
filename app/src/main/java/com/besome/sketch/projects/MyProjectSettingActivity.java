@@ -136,9 +136,9 @@ public class MyProjectSettingActivity extends BaseAppCompatActivity implements V
         projectAppNameValidator = new AppNameValidator(getApplicationContext(), binding.tilAppName);
         projectPackageNameValidator = new PackageNameValidator(getApplicationContext(), binding.tilPackageName);
         projectNameValidator = new VB(getApplicationContext(), binding.tilProjectName);
-        binding.tilPackageName.setOnFocusChangeListener((v, hasFocus) -> {
+        binding.etPackageName.setOnFocusChangeListener((v, hasFocus) -> {
             if (hasFocus) {
-                if (!shownPackageNameChangeWarning && !Helper.getText((EditText) v).trim().contains("com.my.newproject")) {
+                if (!shownPackageNameChangeWarning && !Helper.getText(binding.etPackageName).trim().contains("com.my.newproject")) {
                     showPackageNameChangeWarning();
                 }
             }
@@ -174,6 +174,10 @@ public class MyProjectSettingActivity extends BaseAppCompatActivity implements V
             binding.verCode.setText(yB.c(metadata, "sc_ver_code"));
             binding.verName.setText(yB.c(metadata, "sc_ver_name"));
             projectHasCustomIcon = yB.a(metadata, "custom_icon");
+            // Read the adaptive-icon flag back, otherwise saving the settings unconditionally
+            // writes the field default (false) and wipes the flag for projects created with
+            // an adaptive icon (isIconAdaptive is only set from the icon-creator result).
+            isIconAdaptive = yB.a(metadata, "isIconAdaptive");
             if (projectHasCustomIcon) {
                 binding.appIcon.setImageURI(FileProvider.getUriForFile(getApplicationContext(), getApplicationContext().getPackageName() + ".provider", getCustomIcon()));
             }
@@ -311,7 +315,8 @@ public class MyProjectSettingActivity extends BaseAppCompatActivity implements V
 
         String[] split = Helper.getText(binding.verName).split("\\.");
         AtomicInteger projectNewVersionNameFirstPart = new AtomicInteger(parseInt(split[0], 1));
-        AtomicInteger projectNewVersionNameSecondPart = new AtomicInteger(parseInt(split[1], 0));
+        // Version names without a dot (e.g. "2", accepted by VersionDialog) have no second part.
+        AtomicInteger projectNewVersionNameSecondPart = new AtomicInteger(split.length > 1 ? parseInt(split[1], 0) : 0);
         if (projectNewVersionNameFirstPart.get() - 5 > 0) {
             versionNameFirstPartMinimum = projectNewVersionNameFirstPart.get() - 5;
         }
@@ -589,7 +594,8 @@ public class MyProjectSettingActivity extends BaseAppCompatActivity implements V
 
             if (FileUtil.isExistFile(stringsFilePath)) {
                 String xmlContent = FileUtil.readFile(stringsFilePath);
-                xmlContent = xmlContent.replaceAll("(<string\\s+name=\"app_name\">)(.*?)(</string>)", "$1" + newAppName + "$3");
+                xmlContent = xmlContent.replaceAll("(<string\\s+name=\"app_name\">)(.*?)(</string>)",
+                        "$1" + java.util.regex.Matcher.quoteReplacement(newAppName) + "$3");
                 FileUtil.writeFile(stringsFilePath, xmlContent);
             }
 

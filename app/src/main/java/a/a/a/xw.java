@@ -28,7 +28,7 @@ public class xw extends qA {
 
     public String g;
     public ArrayList<ProjectFileBean> h = new ArrayList<>();
-    public int[] l = new int[19];
+    public int[] l = new int[99];
     private Adapter adapter;
     private boolean hasSelection = false;
 

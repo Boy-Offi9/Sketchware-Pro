@@ -252,6 +252,14 @@ public class FileUtil {
 
     public static void copyFile(String sourcePath, String destPath) {
         if (!isExistFile(sourcePath)) return;
+        // Self-copy would truncate the file to zero: FileOutputStream(dest, false) empties
+        // it before the first read. Return early instead (font manager taps can hit this).
+        try {
+            if (new File(sourcePath).getCanonicalPath()
+                    .equals(new File(destPath).getCanonicalPath())) return;
+        } catch (IOException e) {
+            if (sourcePath.equals(destPath)) return;
+        }
         createNewFileIfNotPresent(destPath);
 
         try (FileInputStream fis = new FileInputStream(sourcePath);
@@ -574,18 +582,23 @@ public class FileUtil {
     }
 
     public static Bitmap getScaledBitmap(String str, int i) {
-        int i2;
         Bitmap decodeFile = BitmapFactory.decodeFile(str);
         int width = decodeFile.getWidth();
         int height = decodeFile.getHeight();
+        int scaledWidth;
+        int scaledHeight;
         if (width > height) {
-            int i3 = i / width * height;
-            i2 = i;
-            i = i3;
+            // Float math: integer division (i / width) can be 0 for wide images,
+            // producing a zero height and an IllegalArgumentException in createScaledBitmap.
+            float rate = (float) i / width;
+            scaledWidth = i;
+            scaledHeight = (int) (height * rate);
         } else {
-            i2 = width * i / height;
+            float rate = (float) i / height;
+            scaledWidth = (int) (width * rate);
+            scaledHeight = i;
         }
-        return Bitmap.createScaledBitmap(decodeFile, i2, i, true);
+        return Bitmap.createScaledBitmap(decodeFile, scaledWidth, scaledHeight, true);
     }
 
     public static int calculateInSampleSize(BitmapFactory.Options options, int reqWidth, int reqHeight) {
@@ -797,19 +810,14 @@ public class FileUtil {
     }
 
     public static byte[] readFromInputStream(InputStream stream) {
-        int available;
-
-        try {
-            available = stream.available();
-        } catch (IOException e) {
-            available = 0;
-        }
-
+        // A fixed-size buffer + len > 0 termination: stream.available() can legitimately
+        // return 0 for data still pending (e.g. ContentResolver/pipe streams), and a
+        // zero-length buffer makes read() return 0 forever, spinning this loop indefinitely.
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        byte[] buffer = new byte[available];
+        byte[] buffer = new byte[32768];
 
         try {
-            for (int len = stream.read(buffer); len != -1; len = stream.read(buffer)) {
+            for (int len = stream.read(buffer); len > 0; len = stream.read(buffer)) {
                 outputStream.write(buffer, 0, len);
             }
         } catch (IOException e) {

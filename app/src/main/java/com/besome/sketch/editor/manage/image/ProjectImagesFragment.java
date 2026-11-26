@@ -70,7 +70,9 @@ public class ProjectImagesFragment extends qA {
     private final FilePathUtil fpu = new FilePathUtil();
     public boolean isSelecting = false;
     public SvgUtils svgUtils;
-    Map<Integer, Map<String, Object>> colorMap = new HashMap<>();
+    // Color filters are keyed by the image's resName, NOT its list position: deletions
+    // shift positions and would silently move filters onto the wrong resource.
+    Map<String, Map<String, Object>> colorMap = new HashMap<>();
     private FrManageImageListBinding binding;
     private String sc_id;
     private ArrayList<ProjectResourceBean> images;
@@ -91,7 +93,7 @@ public class ProjectImagesFragment extends qA {
 
             int selectedColor = data.getIntExtra("iconColor", -1);
             String selectedColorHex = data.getStringExtra("iconColorHex");
-            addNewColorFilterInfo(selectedColorHex, selectedColor, images.size());
+            addNewColorFilterInfo(selectedColorHex, selectedColor, icon.resName);
 
             addImage(icon);
             bB.a(requireActivity(), getString(R.string.design_manager_message_add_complete), bB.TOAST_NORMAL).show();
@@ -162,14 +164,17 @@ public class ProjectImagesFragment extends qA {
         svgUtils.initImageLoader();
         if (arrayList != null) {
             for (ProjectResourceBean next : arrayList) {
-                if (next.flipVertical == 0) {
-                    next.flipVertical = 1;
+                // Work on clones like ProjectSoundsFragment does: these flags would
+                // otherwise mutate the registry-owned beans even if the user cancels.
+                ProjectResourceBean copy = next.clone();
+                if (copy.flipVertical == 0) {
+                    copy.flipVertical = 1;
                 }
-                if (next.flipHorizontal == 0) {
-                    next.flipHorizontal = 1;
+                if (copy.flipHorizontal == 0) {
+                    copy.flipHorizontal = 1;
                 }
-                next.savedPos = 0;
-                images.add(next);
+                copy.savedPos = 0;
+                images.add(copy);
             }
         }
     }
@@ -218,7 +223,7 @@ public class ProjectImagesFragment extends qA {
                         // convert the svg to vectors
                         String svgPath = fpu.getSvgFullPath(sc_id, image.resName);
                         copyFile(path, svgPath);
-                        svgUtils.convert(svgPath, projectImagesDirectory, readColorHex(index));
+                        svgUtils.convert(svgPath, projectImagesDirectory, readColorHex(image.resName));
                     } else if (image.resFullName.endsWith(".xml")) {
                         // Vector drawable produced from a previously saved SVG.
                         // Regenerate it from the source SVG (covers renames and
@@ -226,7 +231,7 @@ public class ProjectImagesFragment extends qA {
                         // cannot read vector files.
                         String svgPath = fpu.getSvgFullPath(sc_id, image.resName);
                         if (new File(svgPath).exists()) {
-                            svgUtils.convert(svgPath, projectImagesDirectory, readColorHex(index));
+                            svgUtils.convert(svgPath, projectImagesDirectory, readColorHex(image.resName));
                         }
                     } else {
                         iB.a(path, image.isNinePatch() ? str + ".9.png" : str + ".png", image.rotate, image.flipHorizontal, image.flipVertical);
@@ -273,8 +278,8 @@ public class ProjectImagesFragment extends qA {
      * no filter (no recoloring). {@code colorMap} only holds entries for
      * icon-imported items, so a missing entry must not crash the save.
      */
-    private String readColorHex(int index) {
-        Map<String, Object> colorItem = colorMap.get(index);
+    private String readColorHex(String resName) {
+        Map<String, Object> colorItem = colorMap.get(resName);
         if (colorItem == null) {
             return null;
         }
@@ -482,13 +487,13 @@ public class ProjectImagesFragment extends qA {
         updateGuideVisibility();
     }
 
-    private void addNewColorFilterInfo(String colorHex, int color, int forPosition) {
+    private void addNewColorFilterInfo(String colorHex, int color, String forResName) {
         Map<String, Object> colorItem1 = new HashMap<>();
         colorItem1.put("colorHex", colorHex);
         colorItem1.put("color", color);
 
-        colorMap.put(forPosition, colorItem1);
-        Log.d("color filter", "new color filter item at " + forPosition + ": " + colorHex + " " + color);
+        colorMap.put(forResName, colorItem1);
+        Log.d("color filter", "new color filter item for " + forResName + ": " + colorHex + " " + color);
     }
 
     private void addImages(ArrayList<ProjectResourceBean> arrayList) {
@@ -527,9 +532,10 @@ public class ProjectImagesFragment extends qA {
             holder.binding.chkSelect.setChecked(image.isSelected);
             holder.binding.tvImageName.setText(image.resName);
 
-            if (colorMap.get(position) != null) {
-                int color = Objects.requireNonNullElse((int) colorMap.get(position).get("color"), 0xFFFFFFFF);
-                Log.d("Applying filter to " + position, String.valueOf(color));
+            Map<String, Object> colorInfo = colorMap.get(image.resName);
+            if (colorInfo != null) {
+                int color = Objects.requireNonNullElse((int) colorInfo.get("color"), 0xFFFFFFFF);
+                Log.d("Applying filter to " + image.resName, String.valueOf(color));
                 holder.binding.img.setColorFilter(color, PorterDuff.Mode.SRC_IN);
             } else {
                 holder.binding.img.clearColorFilter();
