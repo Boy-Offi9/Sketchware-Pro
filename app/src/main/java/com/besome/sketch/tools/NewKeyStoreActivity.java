@@ -12,29 +12,31 @@ import com.besome.sketch.lib.base.BaseAppCompatActivity;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputLayout;
 
+import java.io.File;
+
 import a.a.a.RB;
 import a.a.a.SB;
 import a.a.a.VB;
 import a.a.a.bB;
-import a.a.a.iI;
 import a.a.a.mB;
+import a.a.a.oB;
 import a.a.a.wq;
 import mod.hey.studios.util.Helper;
 import pro.sketchware.R;
 import pro.sketchware.databinding.KeystoreNewBinding;
+import pro.sketchware.utility.StrongKeyStoreCreator;
 
 public class NewKeyStoreActivity extends BaseAppCompatActivity implements OnClickListener {
 
     public KeystoreNewBinding binding;
 
-    private final int validityInYears = 25;
+    private final int validityInYears = StrongKeyStoreCreator.DEFAULT_VALIDITY_YEARS;
     private RB organizationValidator;
     private RB localityValidator;
     private RB stateValidator;
     private RB countryValidator;
     private RB commonNameValidator;
     private RB organizationalUnitValidator;
-    private iI E;
     private EditText alias;
     private EditText password;
     private EditText passwordConfirm;
@@ -98,22 +100,26 @@ public class NewKeyStoreActivity extends BaseAppCompatActivity implements OnClic
 
             if (!countryValidator.b()) return;
 
-            StringBuilder stringBuilder = new StringBuilder();
-            stringBuilder.append("CN=");
-            stringBuilder.append(Helper.getText(commonName));
-            stringBuilder.append("OU=");
-            stringBuilder.append(Helper.getText(organizationalUnit));
-            stringBuilder.append("O=");
-            stringBuilder.append(Helper.getText(organization));
-            stringBuilder.append("L=");
-            stringBuilder.append(Helper.getText(locality));
-            stringBuilder.append("ST=");
-            stringBuilder.append(Helper.getText(state));
-            stringBuilder.append("C=");
-            stringBuilder.append(Helper.getText(country));
+            String dn = new StringBuilder("CN=")
+                    .append(Helper.getText(commonName))
+                    .append(", OU=").append(Helper.getText(organizationalUnit))
+                    .append(", O=").append(Helper.getText(organization))
+                    .append(", L=").append(Helper.getText(locality))
+                    .append(", ST=").append(Helper.getText(state))
+                    .append(", C=").append(Helper.getText(country))
+                    .toString();
 
             try {
-                E.a(wq.j(), stringBuilder.toString(), validityInYears, Helper.getText(alias), text);
+                String keystorePath = wq.j();
+                File keystoreDir = new File(keystorePath).getParentFile();
+                if (keystoreDir != null && !keystoreDir.exists() && !keystoreDir.mkdirs()) {
+                    throw new Exception("Failed to create keystore directory: " + keystoreDir);
+                }
+
+                char[] pass = text.toCharArray();
+                byte[] keystoreBytes = StrongKeyStoreCreator.createKeystore(
+                        dn, validityInYears, Helper.getText(alias), pass);
+                new oB().a(keystorePath, keystoreBytes);
                 showDoneDialog(true, text);
             } catch (Exception e) {
                 e.printStackTrace();
@@ -153,7 +159,6 @@ public class NewKeyStoreActivity extends BaseAppCompatActivity implements OnClic
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         getSupportActionBar().setDisplayShowTitleEnabled(true);
         toolbar.setNavigationOnClickListener(Helper.getBackPressedClickListener(this));
-        E = new iI();
 
         binding.btnKeystoreSave.setOnClickListener(this);
         binding.btnKeystoreCancel.setOnClickListener(this);
