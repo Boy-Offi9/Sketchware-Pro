@@ -139,43 +139,54 @@ public class BackupRestoreManager {
         FilePickerCallback callback = new FilePickerCallback() {
             @Override
             public void onFilesSelected(@NotNull List<? extends File> files) {
-                ExecutorService executor = Executors.newSingleThreadExecutor();
-                executor.execute(() -> {
-                    for (int i = 0; i < files.size(); i++) {
-                        String backupFilePath = files.get(i).getAbsolutePath();
-                        int currentIndex = i;
-                        boolean hasLocalLibs = BackupFactory.zipContainsFile(backupFilePath, "local_libs");
-
-                        act.runOnUiThread(() -> {
-                            if (act.isFinishing() || act.isDestroyed()) {
-                                return;
-                            }
-                            if (hasLocalLibs) {
-                                boolean restoringMultipleBackups = files.size() > 1;
-
-                                new MaterialAlertDialogBuilder(act)
-                                        .setTitle(R.string.common_word_warning)
-                                        .setMessage(getRestoreIntegratedLocalLibrariesMessage(restoringMultipleBackups, currentIndex, files.size(),
-                                                FileUtil.getFileNameNoExtension(backupFilePath)))
-                                        .setPositiveButton("Copy", (dialog, which) -> doRestore(backupFilePath, true))
-                                        .setNegativeButton("Don't copy", (dialog, which) -> doRestore(backupFilePath, false))
-                                        .setNeutralButton(R.string.common_word_cancel, null)
-                                        .show();
-                            } else {
-                                doRestore(backupFilePath, false);
-                            }
-                        });
-                    }
-                    executor.shutdown();
-                });
+                // Sequential queue: one confirmation prompt (and restore) at a time,
+                // advanced from RestoreAsyncTask.onPostExecute via processNextBackup.
+                // The old loop posted every dialog at once, stacking N prompts.
+                processNextBackup(files, 0);
             }
         };
 
         new FilePickerDialogFragment(options, callback).show(projectsFragment.getChildFragmentManager(), "file_picker");
     }
 
+    private final ExecutorService restoreQueueExecutor = Executors.newSingleThreadExecutor();
+
+    private void processNextBackup(List<? extends File> files, int index) {
+        if (index >= files.size()) return;
+        File backupFile = files.get(index);
+        // Scan the archive off the UI thread, then prompt.
+        restoreQueueExecutor.execute(() -> {
+            boolean hasLocalLibs = BackupFactory.zipContainsFile(backupFile.getAbsolutePath(), "local_libs");
+            act.runOnUiThread(() -> showRestorePrompt(files, index, hasLocalLibs));
+        });
+    }
+
+    private void showRestorePrompt(List<? extends File> files, int index, boolean hasLocalLibs) {
+        if (act.isFinishing() || act.isDestroyed()) {
+            return;
+        }
+        String backupFilePath = files.get(index).getAbsolutePath();
+        Runnable next = () -> processNextBackup(files, index + 1);
+        if (hasLocalLibs) {
+            new MaterialAlertDialogBuilder(act)
+                    .setTitle(R.string.common_word_warning)
+                    .setMessage(getRestoreIntegratedLocalLibrariesMessage(files.size() > 1, index, files.size(),
+                            FileUtil.getFileNameNoExtension(backupFilePath)))
+                    .setPositiveButton("Copy", (dialog, which) -> doRestore(backupFilePath, true, next))
+                    .setNegativeButton("Don't copy", (dialog, which) -> doRestore(backupFilePath, false, next))
+                    .setNeutralButton(R.string.common_word_cancel, (dialog, which) -> next.run())
+                    .show();
+        } else {
+            doRestore(backupFilePath, false, next);
+        }
+    }
+
     public void doRestore(String file, boolean restoreLocalLibs) {
-        new RestoreAsyncTask(new WeakReference<>(act), file, restoreLocalLibs, projectsFragment).execute("");
+        doRestore(file, restoreLocalLibs, null);
+    }
+
+    public void doRestore(String file, boolean restoreLocalLibs, Runnable onComplete) {
+        new RestoreAsyncTask(new WeakReference<>(act), file, restoreLocalLibs, projectsFragment, onComplete).execute("");
     }
 
     private static class BackupAsyncTask extends AsyncTask<String, Integer, String> {
@@ -238,12 +249,18 @@ public class BackupRestoreManager {
         private BackupFactory bm;
         private AlertDialog dlg;
         private boolean error = false;
+        private final Runnable onComplete;
 
         RestoreAsyncTask(WeakReference<Activity> activityWeakReference, String file, boolean restoreLocalLibraries, ProjectsFragment projectsFragment) {
+            this(activityWeakReference, file, restoreLocalLibraries, projectsFragment, null);
+        }
+
+        RestoreAsyncTask(WeakReference<Activity> activityWeakReference, String file, boolean restoreLocalLibraries, ProjectsFragment projectsFragment, Runnable onComplete) {
             this.activityWeakReference = activityWeakReference;
             this.file = file;
             this.projectsFragment = projectsFragment;
             restoreLocalLibs = restoreLocalLibraries;
+            this.onComplete = onComplete;
         }
 
         @Override
@@ -284,6 +301,10 @@ public class BackupRestoreManager {
                 SketchwareUtil.toast("Restored successfully");
             } else {
                 SketchwareUtil.toast("Restored successfully. Refresh to see the project", Toast.LENGTH_LONG);
+            }
+
+            if (onComplete != null) {
+                onComplete.run();
             }
         }
     }

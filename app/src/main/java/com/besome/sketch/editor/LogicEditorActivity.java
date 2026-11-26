@@ -211,10 +211,17 @@ public class LogicEditorActivity extends BaseAppCompatActivity implements View.O
 
     private void loadEventBlocks() {
         crashlytics.log("Loading event blocks");
+        // Worker thread only decrypts/fetches the block list; ALL BlockPane and Rs view
+        // construction and mutation (including the o.g next-id counter) runs as a single
+        // UI-thread batch. Previously Rs views were constructed and o.g updated on the
+        // worker thread, racing UI-thread copy/paste actions that also allocate ids.
         ArrayList<BlockBean> eventBlocks = jC.a(scId).a(M.getJavaName(), id + "_" + eventName);
-        if (eventBlocks != null) {
+        if (eventBlocks == null) {
+            return;
+        }
+        runOnUiThread(() -> {
             if (eventBlocks.isEmpty()) {
-                runOnUiThread(() -> e(X));
+                e(X);
             }
 
             boolean needToFindRoot = true;
@@ -226,12 +233,10 @@ public class LogicEditorActivity extends BaseAppCompatActivity implements View.O
                 Rs b2 = b(next);
                 blockIdsAndBlocks.put((Integer) b2.getTag(), b2);
                 o.g = Math.max(o.g, (Integer) b2.getTag() + 1);
-                runOnUiThread(() -> {
-                    o.a(b2, 0, 0);
-                    b2.setOnTouchListener(this);
-                });
+                o.a(b2, 0, 0);
+                b2.setOnTouchListener(this);
                 if (needToFindRoot) {
-                    runOnUiThread(() -> o.getRoot().b(b2));
+                    o.getRoot().b(b2);
                     needToFindRoot = false;
                 }
             }
@@ -270,11 +275,9 @@ public class LogicEditorActivity extends BaseAppCompatActivity implements View.O
                     }
                 }
             }
-            runOnUiThread(() -> {
-                o.getRoot().k();
-                o.b();
-            });
-        }
+            o.getRoot().k();
+            o.b();
+        });
     }
 
     private void redo() {

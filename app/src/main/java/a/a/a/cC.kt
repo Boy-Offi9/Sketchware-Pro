@@ -1,5 +1,7 @@
 package a.a.a
 
+import com.besome.sketch.beans.BlockBean
+import com.besome.sketch.beans.EventBean
 import com.besome.sketch.beans.HistoryViewBean
 import com.besome.sketch.beans.ViewBean
 import java.util.ArrayList
@@ -119,6 +121,22 @@ class cC(@JvmField var d: String) {
     fun b(str: String, arrayList: ArrayList<ViewBean>) {
         val bean = HistoryViewBean()
         bean.actionRemove(arrayList)
+        if (c?.containsKey(str) != true) {
+            e(str)
+        }
+        a(str)
+        a(str, bean)
+    }
+
+    fun b(
+        str: String,
+        arrayList: ArrayList<ViewBean>,
+        removedEvents: ArrayList<EventBean>?,
+        removedLogic: HashMap<String, ArrayList<BlockBean>>?
+    ) {
+        val bean = HistoryViewBean()
+        bean.actionRemove(arrayList)
+        bean.attachRemovedEventData(removedEvents, removedLogic)
         if (c?.containsKey(str) != true) {
             e(str)
         }

@@ -29,6 +29,10 @@ import com.besome.sketch.editor.view.palette.PaletteWidget;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+
+import com.besome.sketch.beans.BlockBean;
+import com.besome.sketch.beans.EventBean;
 
 import mod.hey.studios.util.Helper;
 import pro.sketchware.R;
@@ -377,6 +381,30 @@ public class ViewEditorFragment extends qA {
         return isPropertyViewVisible;
     }
 
+    /**
+     * Re-registers the events (and their block logic) that were snapshotted when the
+     * widget(s) of this ACTION_TYPE_REMOVE history entry were deleted, restoring the
+     * pre-delete state after an undo.
+     */
+    private void restoreRemovedEventData(HistoryViewBean historyViewBean) {
+        ArrayList<EventBean> events = historyViewBean.getRemovedEvents();
+        if (events == null || events.isEmpty()) {
+            return;
+        }
+        HashMap<String, ArrayList<BlockBean>> logic = historyViewBean.getRemovedLogic();
+        String javaName = projectFileBean.getJavaName();
+        for (EventBean eventBean : events) {
+            jC.a(sc_id).a(javaName, eventBean);
+            if (logic != null) {
+                String key = eventBean.targetId + "_" + eventBean.eventName;
+                ArrayList<BlockBean> blocks = logic.get(key);
+                if (blocks != null) {
+                    jC.a(sc_id).a(javaName, key, new ArrayList<>(blocks));
+                }
+            }
+        }
+    }
+
     private void onRedo() {
         if (!isDragging) {
             HistoryViewBean historyViewBean = cC.c(sc_id).h(projectFileBean.getXmlName());
@@ -470,6 +498,10 @@ public class ViewEditorFragment extends qA {
                     for (ViewBean view : historyViewBean.getRemovedData()) {
                         jC.a(sc_id).a(projectFileBean.getXmlName(), view);
                     }
+                    // Re-register the events and logic that were snapshotted when the
+                    // widget was deleted; without this, undo of a delete brings the widget
+                    // back with all its events and blocks permanently gone.
+                    restoreRemovedEventData(historyViewBean);
                     viewEditor.a(viewEditor.a(historyViewBean.getRemovedData(), false), false);
                 } else if (actionType == HistoryViewBean.ACTION_TYPE_MOVE) {
                     ViewBean movedData = historyViewBean.getMovedData();

@@ -47,6 +47,8 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
+import com.besome.sketch.beans.BlockBean;
+import com.besome.sketch.beans.EventBean;
 
 import a.a.a.DB;
 import a.a.a.GB;
@@ -458,10 +460,32 @@ public class ViewEditor extends RelativeLayout implements View.OnClickListener, 
 
     public void deleteWidget(ViewBean viewBean) {
         ArrayList<ViewBean> b2 = jC.a(a).b(b, viewBean);
+        // Snapshot the events and their logic owned by the removed widgets BEFORE
+        // deletion wipes them, so undo (and redo of an undo) can restore them.
+        String javaName = projectFileBean.getJavaName();
+        ArrayList<EventBean> removedEvents = new ArrayList<>();
+        HashMap<String, ArrayList<BlockBean>> removedLogic = new HashMap<>();
+        HashMap<String, ArrayList<BlockBean>> existingLogic = jC.a(a).b(javaName);
+        for (ViewBean removedView : b2) {
+            for (EventBean eventBean : jC.a(a).g(javaName)) {
+                boolean owned = eventBean.targetId.equals(removedView.id)
+                        || eventBean.targetId.equals("_drawer_" + removedView.id);
+                if (owned) {
+                    EventBean snapshot = new EventBean(eventBean.eventType, eventBean.targetType,
+                            eventBean.targetId, eventBean.eventName);
+                    removedEvents.add(snapshot);
+                    String key = eventBean.targetId + "_" + eventBean.eventName;
+                    ArrayList<BlockBean> blocks = existingLogic.get(key);
+                    if (blocks != null) {
+                        removedLogic.put(key, new ArrayList<>(blocks));
+                    }
+                }
+            }
+        }
         for (int size = b2.size() - 1; size >= 0; size--) {
             jC.a(a).a(projectFileBean, b2.get(size));
         }
-        b(b2, true);
+        b(b2, true, removedEvents, removedLogic);
     }
 
     public void setFavoriteData(ArrayList<WidgetCollectionBean> arrayList) {
@@ -598,8 +622,13 @@ public class ViewEditor extends RelativeLayout implements View.OnClickListener, 
     }
 
     public void b(ArrayList<ViewBean> arrayList, boolean z) {
+        b(arrayList, z, null, null);
+    }
+
+    public void b(ArrayList<ViewBean> arrayList, boolean z, ArrayList<EventBean> removedEvents,
+                  HashMap<String, ArrayList<BlockBean>> removedLogic) {
         if (z) {
-            cC.c(a).b(projectFileBean.getXmlName(), arrayList);
+            cC.c(a).b(projectFileBean.getXmlName(), arrayList, removedEvents, removedLogic);
             if (historyChangeListener != null) {
                 historyChangeListener.a();
             }

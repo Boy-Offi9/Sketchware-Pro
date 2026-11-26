@@ -18,6 +18,25 @@ public class HistoryViewBean extends nA {
     public ViewBean moveData;
     public ViewBean prevUpdateData;
     public ArrayList<ViewBean> removedData;
+    /**
+     * Events (and their logic) owned by {@link #removedData} widgets, snapshotted at
+     * deletion time so undo/redo can re-register them. Null for non-remove actions.
+     */
+    public ArrayList<EventBean> removedEvents;
+    public HashMap<String, ArrayList<BlockBean>> removedLogic;
+
+    public void attachRemovedEventData(ArrayList<EventBean> events, HashMap<String, ArrayList<BlockBean>> logic) {
+        removedEvents = events;
+        removedLogic = logic;
+    }
+
+    public ArrayList<EventBean> getRemovedEvents() {
+        return removedEvents;
+    }
+
+    public HashMap<String, ArrayList<BlockBean>> getRemovedLogic() {
+        return removedLogic;
+    }
 
     public void actionAdd(ArrayList<ViewBean> arrayList) {
         actionType = 0;
@@ -89,6 +108,8 @@ public class HistoryViewBean extends nA {
                 removedData.add(viewBean2);
             }
         }
+        removedEvents = historyViewBean.removedEvents;
+        removedLogic = historyViewBean.removedLogic;
     }
 
     public int getActionType() {
