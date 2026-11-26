@@ -136,7 +136,11 @@ class cC(@JvmField var d: String) {
     ) {
         val bean = HistoryViewBean()
         bean.actionRemove(arrayList)
-        bean.attachRemovedEventData(removedEvents, removedLogic)
+        // attachRemovedEventData expects non-null (Java platform types); a removal without
+        // snapshot data just stores no removed events.
+        if (removedEvents != null && removedLogic != null) {
+            bean.attachRemovedEventData(removedEvents, removedLogic)
+        }
         if (c?.containsKey(str) != true) {
             e(str)
         }

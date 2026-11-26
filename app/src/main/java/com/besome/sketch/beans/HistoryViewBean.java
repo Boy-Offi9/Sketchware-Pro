@@ -3,6 +3,7 @@ package com.besome.sketch.beans;
 import androidx.annotation.NonNull;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 
 import a.a.a.nA;
 
