@@ -199,8 +199,13 @@ public class AddEventActivity extends BaseAppCompatActivity implements View.OnCl
                     for (String drawerViewEvent : oq.getEventsForClass(drawerView.getClassInfo())) {
                         boolean exists = false;
                         for (var existingEvent : jC.a(sc_id).g(projectFile.getJavaName())) {
+                            // Match the namespaced target too: NEW drawer events store
+                            // "_drawer_" + id, legacy ones store the raw id - both mean
+                            // "this drawer widget already has this event".
+                            boolean sameTarget = drawerView.id.equals(existingEvent.targetId)
+                                    || ("_drawer_" + drawerView.id).equals(existingEvent.targetId);
                             if (existingEvent.eventType == EventBean.EVENT_TYPE_DRAWER_VIEW
-                                    && drawerView.id.equals(existingEvent.targetId)
+                                    && sameTarget
                                     && drawerViewEvent.equals(existingEvent.eventName)) {
                                 exists = true;
                                 break;

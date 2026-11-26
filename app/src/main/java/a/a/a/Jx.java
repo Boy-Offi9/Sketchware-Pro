@@ -451,7 +451,7 @@ public class Jx {
             // Adds initializeLogic() call too, don't worry
             sb.append(permissionManager.writePermission(buildConfig.g, buildConfig.a(projectFileBean.getActivityName()).c));
         } else {
-            sb.append("initializeLogic();").append(EOL);
+            sb.append("initializeLogic(_savedInstanceState, _view);").append(EOL);
             if (isViewBindingEnabled) {
                 sb.append("return binding.getRoot();").append(EOL);
             } else {
@@ -466,7 +466,7 @@ public class Jx {
             sb.append("public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {").append(EOL);
             sb.append("super.onRequestPermissionsResult(requestCode, permissions, grantResults);").append(EOL);
             sb.append("if (requestCode == 1000) {").append(EOL);
-            sb.append("initializeLogic();").append(EOL);
+            sb.append("initializeLogic(null);").append(EOL);
             sb.append("}").append(EOL);
             sb.append("}").append(EOL);
         }
@@ -526,7 +526,15 @@ public class Jx {
         sb.append(EOL);
         sb.append("}").append(EOL);
         sb.append(EOL);
-        sb.append("private void initializeLogic() {").append(EOL);
+        // The legacy "On activity create" duplicate body (initializeLogic_initializeLogic,
+        // emitted by initializeLogicMethod()) references _savedInstanceState (and _view for
+        // fragments) because it used to run inside initialize(Bundle). Pass them through so
+        // user-entered raw source in that body still resolves.
+        if (isFragment) {
+            sb.append("private void initializeLogic(Bundle _savedInstanceState, View _view) {").append(EOL);
+        } else {
+            sb.append("private void initializeLogic(Bundle _savedInstanceState) {").append(EOL);
+        }
         if (!TextUtils.isEmpty(initializeLogicMethod())) {
             sb.append(initializeLogicMethod()).append(EOL);
         }

@@ -935,6 +935,11 @@ public class ViewPropertyItems extends LinearLayout implements Kw, View.OnClickL
                 HashMap<String, ArrayList<BlockBean>> beanMap = jC.a(sc_id).b(e.getJavaName());
                 ArrayList<EventBean> eventBeans = jC.a(sc_id).g(e.getJavaName());
 
+                // Snapshot orphan candidates BEFORE the event pass moves keys: after the pass,
+                // a moved key (e.g. button_onClick -> button_new_onClick) would still start with
+                // the old prefix and get moved a second time (button_new_new_onClick).
+                java.util.ArrayList<String> orphanCandidates = new java.util.ArrayList<>(beanMap.keySet());
+
                 java.util.HashSet<String> foreignKeys = new java.util.HashSet<>();
                 for (EventBean eventBean : eventBeans) {
                     if (!eventBean.targetId.equals(bean.preId)
@@ -962,7 +967,10 @@ public class ViewPropertyItems extends LinearLayout implements Kw, View.OnClickL
                 // keys). Owned-by-others keys and activity-level keys are left alone.
                 String drawerPrefix = "_drawer_" + bean.preId + "_";
                 String plainPrefix = bean.preId + "_";
-                for (String key : new ArrayList<>(beanMap.keySet())) {
+                for (String key : orphanCandidates) {
+                    // Skip keys the event pass already moved (no longer present) and keys it
+                    // just created under the new id.
+                    if (!beanMap.containsKey(key)) continue;
                     String remapped = null;
                     if (!key.equals("onCreate_initializeLogic") && !foreignKeys.contains(key)) {
                         if (key.startsWith(plainPrefix)) {

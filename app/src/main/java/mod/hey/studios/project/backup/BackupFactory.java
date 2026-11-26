@@ -306,11 +306,15 @@ public class BackupFactory {
         String versionName = yB.c(lC.b(sc_id), "sc_ver_name");
         String versionCode = yB.c(lC.b(sc_id), "sc_ver_code");
         String pkgName = yB.c(lC.b(sc_id), "my_sc_pkg_name");
-        String projectNameOnly = project_name.replace(File.separator, "");
+        String sanitizedProjectName = project_name.replace(File.separator, "");
+        String projectNameOnly = sanitizedProjectName;
         while (projectNameOnly.endsWith("_d")) {
             projectNameOnly = projectNameOnly.substring(0, projectNameOnly.length() - 2);
         }
-        String duplicateSuffix = project_name.substring(projectNameOnly.length());
+        // Derive the duplicate suffix from the sanitized name too: slicing the original
+        // name at the sanitized length could leave a File.separator (and extra "_d" text)
+        // inside the suffix, producing an output path with a separator in it.
+        String duplicateSuffix = sanitizedProjectName.substring(projectNameOnly.length());
         String finalFileName;
 
         try {
@@ -567,7 +571,15 @@ public class BackupFactory {
         // Snapshot pre-existing children so a failed copy can be rolled back: leaving
         // half-copied sc_id folders in the live data dir leaks files into the next
         // project that reuses the same id (copy never deletes destination-only files).
+        // A null snapshot means the listing itself failed - abort rather than risk
+        // rolling back pre-existing children later.
         java.util.HashSet<String> preExistingData = listChildNames(getDataDir());
+        if (preExistingData == null) {
+            error = "couldn't list existing project data";
+            restoreSuccess = false;
+            FileUtil.deleteFile(outFolder.getAbsolutePath());
+            return false;
+        }
         if (!copy(data, getDataDir())) {
             error = "couldn't copy project data";
             restoreSuccess = false;
@@ -577,38 +589,33 @@ public class BackupFactory {
         }
 
         // Copy res
+        java.util.ArrayList<Object[]> resourceRollbacks = new java.util.ArrayList<>();
         for (String subfolder : resSubfolders) {
             File subf = new File(res, subfolder);
             File resDir = getResDir(subfolder);
             java.util.HashSet<String> preExistingRes = listChildNames(resDir);
+            if (preExistingRes == null) {
+                error = "couldn't list existing project resources (" + subfolder + ")";
+                restoreSuccess = false;
+                rollbackRestoreArtifacts(preExistingData, resourceRollbacks);
+                FileUtil.deleteFile(outFolder.getAbsolutePath());
+                return false;
+            }
 
             if (!copySafe(subf, resDir)) {
                 error = "couldn't copy project resources (" + subfolder + ")";
                 restoreSuccess = false;
-                rollbackNewChildren(resDir, preExistingRes);
-                rollbackNewChildren(getDataDir(), preExistingData);
+                rollbackRestoreArtifacts(preExistingData, resourceRollbacks);
                 FileUtil.deleteFile(outFolder.getAbsolutePath());
                 return false;
             }
+            resourceRollbacks.add(new Object[]{resDir, preExistingRes});
         }
 
-        // Create parent folder
-        getProjectPath().getParentFile().mkdirs();
-
-        // Copy project
-        boolean projectExisted = getProjectPath().exists();
-        if (!copy(project, getProjectPath())) {
-            error = "couldn't copy the project file";
-            restoreSuccess = false;
-            if (!projectExisted) {
-                FileUtil.deleteFile(getProjectPath().getAbsolutePath());
-            }
-            rollbackNewChildren(getDataDir(), preExistingData);
-            FileUtil.deleteFile(outFolder.getAbsolutePath());
-            return false;
-        }
-
-        // Copy local libs if they do not exist
+        // Restore local libraries BEFORE publishing the project file: the project must
+        // never appear in the project list with required libraries missing. A library
+        // merge failure leaves the shared local-libs dir untouched for existing libs
+        // (mergeMissingFiles only adds missing files), so aborting here is safe.
         if (backupLocalLibs) {
             File local_libs = new File(outFolder, "local_libs");
 
@@ -622,7 +629,13 @@ public class BackupFactory {
 
                         if (!local_lib_real_path.exists()) {
                             local_lib_real_path.mkdirs();
-                            copy(local_lib, local_lib_real_path);
+                            if (!copy(local_lib, local_lib_real_path)) {
+                                error = "couldn't restore local library: " + local_lib.getName();
+                                restoreSuccess = false;
+                                rollbackRestoreArtifacts(preExistingData, resourceRollbacks);
+                                FileUtil.deleteFile(outFolder.getAbsolutePath());
+                                return false;
+                            }
                         } else {
                             // The library already exists. Merge any files that are missing
                             // from the installed copy (e.g. a partially unpacked library),
@@ -630,6 +643,7 @@ public class BackupFactory {
                             if (!mergeMissingFiles(local_lib, local_lib_real_path)) {
                                 error = "failed to restore local library: " + local_lib.getName();
                                 restoreSuccess = false;
+                                rollbackRestoreArtifacts(preExistingData, resourceRollbacks);
                                 FileUtil.deleteFile(outFolder.getAbsolutePath());
                                 return false;
                             }
@@ -639,11 +653,36 @@ public class BackupFactory {
             }
         }
 
+        // Create parent folder
+        getProjectPath().getParentFile().mkdirs();
+
+        // Copy project (this "publishes" the restored project - it runs last on purpose)
+        boolean projectExisted = getProjectPath().exists();
+        if (!copy(project, getProjectPath())) {
+            error = "couldn't copy the project file";
+            restoreSuccess = false;
+            if (!projectExisted) {
+                FileUtil.deleteFile(getProjectPath().getAbsolutePath());
+            }
+            rollbackRestoreArtifacts(preExistingData, resourceRollbacks);
+            FileUtil.deleteFile(outFolder.getAbsolutePath());
+            return false;
+        }
+
         // Delete temp folder
         FileUtil.deleteFile(outFolder.getAbsolutePath());
 
         restoreSuccess = true;
         return true;
+    }
+
+    /** Rolls back data and resource children copied by a failed restore. */
+    private void rollbackRestoreArtifacts(java.util.HashSet<String> preExistingData,
+            java.util.ArrayList<Object[]> resourceRollbacks) {
+        rollbackNewChildren(getDataDir(), preExistingData);
+        for (Object[] rollback : resourceRollbacks) {
+            rollbackNewChildren((File) rollback[0], (java.util.HashSet<String>) rollback[1]);
+        }
     }
 
     /**
@@ -681,14 +720,21 @@ public class BackupFactory {
         return temp.renameTo(destination);
     }
 
-    /** @return names of the direct children of {@code dir}, or an empty set if it doesn't exist. */
+    /**
+     * @return names of the direct children of {@code dir}, an empty set if it doesn't exist,
+     * or {@code null} if listing an existing directory failed (I/O error) - callers must
+     * distinguish these, otherwise a failed snapshot would look like "nothing existed" and
+     * a later rollback could delete pre-existing children.
+     */
     private static java.util.HashSet<String> listChildNames(File dir) {
         java.util.HashSet<String> names = new java.util.HashSet<>();
         File[] children = dir.listFiles();
-        if (children != null) {
-            for (File child : children) {
-                names.add(child.getName());
-            }
+        if (children == null) {
+            if (dir.exists()) return null;
+            return names;
+        }
+        for (File child : children) {
+            names.add(child.getName());
         }
         return names;
     }

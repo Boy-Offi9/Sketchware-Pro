@@ -30,6 +30,14 @@ public class NewKeyStoreActivity extends BaseAppCompatActivity implements OnClic
 
     public KeystoreNewBinding binding;
 
+    /**
+     * Which save request currently owns the keystore destination, across activity
+     * instances (back out and reopen re-runs save() on a fresh instance). An abandoned
+     * worker whose token no longer matches must not write the keystore or report success.
+     */
+    private static final java.util.concurrent.atomic.AtomicReference<String> activeSaveToken = new java.util.concurrent.atomic.AtomicReference<>(null);
+    private String saveToken;
+
     private final int validityInYears = StrongKeyStoreCreator.DEFAULT_VALIDITY_YEARS;
     private RB organizationValidator;
     private RB localityValidator;
@@ -87,7 +95,6 @@ public class NewKeyStoreActivity extends BaseAppCompatActivity implements OnClic
             }
 
             if (!aliasValidator.b()) return;
-
             if (!commonNameValidator.b()) return;
 
             if (!organizationalUnitValidator.b()) return;
@@ -118,6 +125,10 @@ public class NewKeyStoreActivity extends BaseAppCompatActivity implements OnClic
 
                 char[] pass = text.toCharArray();
                 String aliasText = Helper.getText(alias);
+                // Claim ownership of the destination: a stale worker from a previous
+                // instance must not overwrite this keystore (see activeSaveToken).
+                saveToken = java.util.UUID.randomUUID().toString();
+                activeSaveToken.set(saveToken);
                 // RSA key generation and filesystem writes can take seconds; keep them off
                 // the main thread and prevent duplicate submissions while running.
                 binding.btnKeystoreSave.setEnabled(false);
@@ -126,7 +137,13 @@ public class NewKeyStoreActivity extends BaseAppCompatActivity implements OnClic
                     try {
                         byte[] keystoreBytes = StrongKeyStoreCreator.createKeystore(
                                 dn, validityInYears, aliasText, pass);
+                        // Ownership check: if the user backed out and reopened the screen, a
+                        // newer save request owns this destination - an abandoned worker from
+                        // the dead instance must neither overwrite the keystore nor report
+                        // success with credentials the file doesn't match.
+                        if (!saveToken.equals(activeSaveToken.get())) return;
                         new oB().a(keystorePath, keystoreBytes);
+                        if (!saveToken.equals(activeSaveToken.get())) return;
                         runOnUiThread(() -> {
                             // The user may have backed out during generation; a dead activity
                             // can't show dialogs (BadTokenException on an invalid window token).
@@ -163,6 +180,14 @@ public class NewKeyStoreActivity extends BaseAppCompatActivity implements OnClic
                 save();
             }
         }
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        // Invalidate this instance's save request: its worker (if still running) must not
+        // commit the keystore or report success after the user left the screen.
+        activeSaveToken.compareAndSet(saveToken, null);
     }
 
     @Override

@@ -865,14 +865,19 @@ public class LogicEditorActivity extends BaseAppCompatActivity implements View.O
                             String javaName = M.getJavaName();
                             String xmlName = M.getXmlName();
                             if (eventName.equals("onBindCustomView")) {
+                                String drawerPrefix = "_drawer_";
+                                String lookupId = id.startsWith(drawerPrefix) ? id.substring(drawerPrefix.length()) : id;
                                 var eC = jC.a(scId);
                                 // Drawer-view events carry a "_drawer_" prefix on the id (namespaced
-                                // logic keys); strip it for view lookups.
-                                String lookupId = id.startsWith("_drawer_") ? id.substring("_drawer_".length()) : id;
-                                var view = eC.c(xmlName, lookupId);
+                                // logic keys); strip it for view lookups. Resolve in the layout the
+                                // event belongs to first, so a same-named main-layout widget can't
+                                // shadow the drawer widget.
+                                var view = id.startsWith(drawerPrefix)
+                                        ? eC.c("_drawer_" + xmlName, lookupId)
+                                        : eC.c(xmlName, lookupId);
                                 if (view == null) {
-                                    // Event is of a Drawer View
-                                    view = eC.c("_drawer_" + xmlName, lookupId);
+                                    // Fall back to the other layout for legacy raw-id drawer events.
+                                    view = eC.c(id.startsWith(drawerPrefix) ? xmlName : "_drawer_" + xmlName, lookupId);
                                 }
                                 String customView = view.customView;
                                 if (customView != null) {
@@ -1572,10 +1577,14 @@ public class LogicEditorActivity extends BaseAppCompatActivity implements View.O
         if (eventName.equals("onBindCustomView")) {
             var eC = jC.a(scId);
             // Drawer-view events carry a "_drawer_" prefix on the id (namespaced logic keys).
-            String lookupId = id.startsWith("_drawer_") ? id.substring("_drawer_".length()) : id;
-            var view = eC.c(xmlName, lookupId);
+            // Resolve in the layout the event belongs to first; legacy raw-id events fall back.
+            boolean isDrawerEvent = id.startsWith("_drawer_");
+            String lookupId = isDrawerEvent ? id.substring("_drawer_".length()) : id;
+            var view = isDrawerEvent
+                    ? eC.c("_drawer_" + xmlName, lookupId)
+                    : eC.c(xmlName, lookupId);
             if (view == null) {
-                view = eC.c("_drawer_" + xmlName, lookupId);
+                view = eC.c(isDrawerEvent ? xmlName : "_drawer_" + xmlName, lookupId);
             }
             if (view != null && view.customView != null) {
                 xmlName = ProjectFileBean.getXmlName(view.customView);
