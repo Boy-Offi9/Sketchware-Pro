@@ -117,10 +117,30 @@ public class NewKeyStoreActivity extends BaseAppCompatActivity implements OnClic
                 }
 
                 char[] pass = text.toCharArray();
-                byte[] keystoreBytes = StrongKeyStoreCreator.createKeystore(
-                        dn, validityInYears, Helper.getText(alias), pass);
-                new oB().a(keystorePath, keystoreBytes);
-                showDoneDialog(true, text);
+                String aliasText = Helper.getText(alias);
+                // RSA key generation and filesystem writes can take seconds; keep them off
+                // the main thread and prevent duplicate submissions while running.
+                binding.btnKeystoreSave.setEnabled(false);
+                binding.btnKeystoreCancel.setEnabled(false);
+                binding.btnKeystoreSave.post(() -> new Thread(() -> {
+                    try {
+                        byte[] keystoreBytes = StrongKeyStoreCreator.createKeystore(
+                                dn, validityInYears, aliasText, pass);
+                        new oB().a(keystorePath, keystoreBytes);
+                        runOnUiThread(() -> {
+                            binding.btnKeystoreSave.setEnabled(true);
+                            binding.btnKeystoreCancel.setEnabled(true);
+                            showDoneDialog(true, text);
+                        });
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        runOnUiThread(() -> {
+                            binding.btnKeystoreSave.setEnabled(true);
+                            binding.btnKeystoreCancel.setEnabled(true);
+                            showDoneDialog(false, null);
+                        });
+                    }
+                }).start());
             } catch (Exception e) {
                 e.printStackTrace();
                 showDoneDialog(false, null);

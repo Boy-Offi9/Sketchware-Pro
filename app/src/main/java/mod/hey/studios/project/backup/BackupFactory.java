@@ -383,7 +383,7 @@ public class BackupFactory {
                         JSONObject jo = ja.getJSONObject(i);
                         String name = jo.getString("name");
 
-                        if (name.isEmpty() || name.contains(File.separator) || name.contains("..")) {
+                        if (name.isEmpty() || name.equals(".") || name.equals("..") || name.contains(File.separator)) {
                             continue;
                         }
 
@@ -554,7 +554,11 @@ public class BackupFactory {
                             // The library already exists. Merge any files that are missing
                             // from the installed copy (e.g. a partially unpacked library),
                             // but never overwrite existing files with backup versions.
-                            mergeMissingFiles(local_lib, local_lib_real_path);
+                            if (!mergeMissingFiles(local_lib, local_lib_real_path)) {
+                                error = "failed to restore local library: " + local_lib.getName();
+                                restoreSuccess = false;
+                                return;
+                            }
                         }
                     }
                 }
@@ -567,24 +571,58 @@ public class BackupFactory {
         restoreSuccess = true;
     }
 
-    private void mergeMissingFiles(File source, File destination) {
+    /**
+     * Copies {@code source} to {@code destination} if the destination does not exist, through a
+     * temporary file so that an interrupted copy never leaves a partial file at the destination.
+     *
+     * @return true if the destination exists afterwards (pre-existing or copied successfully),
+     * false if the copy failed and nothing was published.
+     */
+    private boolean copyIfMissing(File source, File destination) {
+        if (destination.exists()) {
+            return true;
+        }
+
+        File temp = new File(destination.getParentFile(),
+                destination.getName() + ".tmp_" + System.currentTimeMillis());
+        try (InputStream in = new FileInputStream(source);
+             OutputStream out = new FileOutputStream(temp)) {
+            byte[] buffer = new byte[1024];
+            int length;
+            while ((length = in.read(buffer)) > 0) {
+                out.write(buffer, 0, length);
+            }
+        } catch (IOException e) {
+            FileUtil.deleteFile(temp.getAbsolutePath());
+            return false;
+        }
+
+        // Another restore may have created the destination meanwhile; prefer the existing file.
+        if (destination.exists() && !temp.delete()) {
+            return false;
+        }
+        return temp.renameTo(destination);
+    }
+
+    private boolean mergeMissingFiles(File source, File destination) {
         File[] files = source.listFiles();
-        if (files == null) return;
+        if (files == null) return true;
 
         for (File file : files) {
             File destFile = new File(destination, file.getName());
 
             if (file.isDirectory()) {
-                if (!destFile.exists()) {
-                    destFile.mkdirs();
-                    copy(file, destFile);
-                } else {
-                    mergeMissingFiles(file, destFile);
+                if (!destFile.exists() && !destFile.mkdirs() && !destFile.exists()) {
+                    return false;
                 }
-            } else if (!destFile.exists()) {
-                copy(file, destFile);
+                if (!mergeMissingFiles(file, destFile)) {
+                    return false;
+                }
+            } else if (!copyIfMissing(file, destFile)) {
+                return false;
             }
         }
+        return true;
     }
 
     public String getError() {

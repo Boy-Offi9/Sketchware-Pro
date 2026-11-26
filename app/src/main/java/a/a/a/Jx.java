@@ -120,11 +120,13 @@ public class Jx {
     public String initializeLogicMethod() {
         StringBuilder sb = new StringBuilder();
         if (!onCreateEventCode.isEmpty()) {
-            sb.append(onCreateEventCode).append(EOL);
+            // Block scope: keeps variable declarations (e.g. _intent) from the event body
+            // from clashing with declarations emitted from the legacy duplicate key below.
+            sb.append("{").append(EOL).append(onCreateEventCode).append(EOL).append("}").append(EOL);
         }
         String legacyDuplicate = initializeLogic();
         if (!TextUtils.isEmpty(legacyDuplicate)) {
-            sb.append(legacyDuplicate).append(EOL);
+            sb.append("{").append(EOL).append(legacyDuplicate).append(EOL).append("}").append(EOL);
         }
         return sb.toString();
     }
