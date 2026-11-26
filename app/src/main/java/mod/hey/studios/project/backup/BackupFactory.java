@@ -653,14 +653,22 @@ public class BackupFactory {
             }
         }
 
-        // Create parent folder
+        // Copy project (this "publishes" the restored project - it runs last on purpose).
+        // Copy through a temp file first: copy() truncates the destination up front, so a
+        // mid-copy I/O error would destroy an existing project at this sc_id.
         getProjectPath().getParentFile().mkdirs();
-
-        // Copy project (this "publishes" the restored project - it runs last on purpose)
         boolean projectExisted = getProjectPath().exists();
-        if (!copy(project, getProjectPath())) {
+        File publishTemp = new File(getProjectPath().getParentFile(), getProjectPath().getName() + ".restore_tmp");
+        boolean published = false;
+        if (copy(project, publishTemp)) {
+            if (!projectExisted || getProjectPath().delete()) {
+                published = publishTemp.renameTo(getProjectPath());
+            }
+        }
+        if (!published) {
             error = "couldn't copy the project file";
             restoreSuccess = false;
+            FileUtil.deleteFile(publishTemp.getAbsolutePath());
             if (!projectExisted) {
                 FileUtil.deleteFile(getProjectPath().getAbsolutePath());
             }

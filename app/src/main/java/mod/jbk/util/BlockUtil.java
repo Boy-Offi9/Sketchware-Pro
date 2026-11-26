@@ -49,8 +49,14 @@ public class BlockUtil {
     public static Rs getVariableBlock(Context context, int id, String spec, String opCode) {
         var type = spec.charAt(1);
         return switch (type) {
-            case 'b', 'd', 's' ->
-                    new Rs(context, id, spec.substring(3), Character.toString(type), opCode);
+            // Mirror the writer (Rs.b(String,int) in the jar): bare %b/%d/%s tokens are
+            // first-class - 'b'/'d' never substring at all, 's' only when it has a suffix.
+            // substring(3) on a bare 2-char token used to throw
+            // StringIndexOutOfBoundsException, and (worse) any unhandled token shifted the
+            // variable-slot alignment of every following token.
+            case 'b', 'd' -> new Rs(context, id, "", Character.toString(type), opCode);
+            case 's' ->
+                    new Rs(context, id, spec.length() <= 2 ? "" : spec.substring(3), Character.toString(type), opCode);
             case 'm' -> {
                 String specLast = spec.substring(spec.lastIndexOf(".") + 1);
                 String specFirst = spec.substring(spec.indexOf(".") + 1, spec.lastIndexOf("."));

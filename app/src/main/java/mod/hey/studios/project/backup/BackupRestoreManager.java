@@ -207,6 +207,9 @@ public class BackupRestoreManager {
 
         @Override
         protected void onPreExecute() {
+            // The activity may already be collected (config change / finish) - bail instead
+            // of null-dereferencing the weak reference while building the dialog.
+            if (activityWeakReference.get() == null) return;
             ProgressMsgBoxBinding loadingDialogBinding = ProgressMsgBoxBinding.inflate(LayoutInflater.from(activityWeakReference.get()));
             loadingDialogBinding.tvProgress.setText("Creating backup...");
             dlg = new MaterialAlertDialogBuilder(activityWeakReference.get())
@@ -265,6 +268,9 @@ public class BackupRestoreManager {
 
         @Override
         protected void onPreExecute() {
+            // The activity may already be collected (config change / finish) - bail instead
+            // of null-dereferencing the weak reference while building the dialog.
+            if (activityWeakReference.get() == null) return;
             ProgressMsgBoxBinding loadingDialogBinding = ProgressMsgBoxBinding.inflate(LayoutInflater.from(activityWeakReference.get()));
             loadingDialogBinding.tvProgress.setText("Restoring...");
             dlg = new MaterialAlertDialogBuilder(activityWeakReference.get())

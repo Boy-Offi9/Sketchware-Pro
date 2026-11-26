@@ -851,6 +851,9 @@ public class LogicEditorActivity extends BaseAppCompatActivity implements View.O
 
             for (int i = 0; i < blockBean.parameters.size(); i++) {
                 String parameter = blockBean.parameters.get(i);
+                // V is rebuilt from the CURRENT spec; a spec edited after saving (fewer
+                // tokens than persisted parameters) must not index out of bounds.
+                if (i >= block.V.size()) break;
                 if (parameter != null) {
                     if (!parameter.isEmpty() && parameter.charAt(0) == '@') {
                         int blockId = Integer.parseInt(parameter.substring(1));
